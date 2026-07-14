@@ -7,88 +7,58 @@ using NomoAI.API.Common.Enums;
 
 namespace NomoAI.API.Features.Auth.Register_User
 {
-    public class RegisterUserHandler(AppDbContext dbContext) : IRequestHandler<RegisterUserCommand, Result<RegisterResponseDto>>
+    public class RegisterUserHandler(
+      UserManager<ApplicationUser> userManager,
+      RoleManager<IdentityRole> roleManager,
+      AppDbContext dbContext) : IRequestHandler<RegisterUserCommand, Result<RegisterResponseDto>>
     {
-
-        private readonly AppDbContext _appDbContext = dbContext;
         public async Task<Result<RegisterResponseDto>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
         {
-            bool isUsernameTaken = _appDbContext.Users.Any(u => u.Email == request.Username);
-
-            if (isUsernameTaken)
+            var existingUser = await userManager.FindByEmailAsync(request.Email);
+            if (existingUser is not null)
             {
                 return Result.Failure<RegisterResponseDto>(AuthErrors.UserAlreadyExists);
             }
 
-            // create application user
             var user = new ApplicationUser
             {
-                Id = Guid.NewGuid().ToString(),
-                UserName = request.Username,
-                Email = request.Username,
+                UserName = request.Email        ,
+                Email = request.Email,
                 Fullname = request.FullName,
                 Age = request.Age,
                 Gender = request.Gender
             };
 
-            // hash password
-            var hasher = new PasswordHasher<ApplicationUser>();
-            user.PasswordHash = hasher.HashPassword(user, request.Password);
-
-            _appDbContext.Users.Add(user);
-            await _appDbContext.SaveChangesAsync(cancellationToken);
-
-            // ensure role exists
-            var roleName = request.Role == UserRole.Doctor ? "Doctor" : "Parent";
-            var role = _appDbContext.Roles.FirstOrDefault(r => r.Name == roleName);
-            if (role == null)
+            var createResult = await userManager.CreateAsync(user, request.Password);
+            if (!createResult.Succeeded)
             {
-                role = new IdentityRole
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Name = roleName,
-                    NormalizedName = roleName.ToUpper()
-                };
-                _appDbContext.Roles.Add(role);
-                await _appDbContext.SaveChangesAsync(cancellationToken);
+                var errorMessage = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                return Result.Failure<RegisterResponseDto>(AuthErrors.UserRegistrationFailed);
             }
 
-            // add user role link
-            var userRole = new IdentityUserRole<string>
+            var roleName = request.Role == UserRole.Doctor ? "Doctor" : "Parent";
+            if (!await roleManager.RoleExistsAsync(roleName))
             {
-                UserId = user.Id,
-                RoleId = role.Id
-            };
-            _appDbContext.UserRoles.Add(userRole);
+                await roleManager.CreateAsync(new IdentityRole(roleName));
+            }
+            await userManager.AddToRoleAsync(user, roleName);
 
-            // add corresponding Doctor or Parent entity
             if (request.Role == UserRole.Doctor)
             {
-                var doctor = new Doctor
-                {
-                    UserId = user.Id
-                };
-                _appDbContext.Add(doctor);
+                dbContext.Add(new Doctor { UserId = user.Id });
             }
             else
             {
-                var parent = new Parent
-                {
-                    UserId = user.Id
-                };
-                _appDbContext.Add(parent);
+                dbContext.Add(new Parent { UserId = user.Id });
             }
+            await dbContext.SaveChangesAsync(cancellationToken);
 
-            await _appDbContext.SaveChangesAsync(cancellationToken);
-
-            var response = new RegisterResponseDto
+            return Result.Success(new RegisterResponseDto
             {
                 UserId = user.Id,
                 FullName = user.Fullname,
                 Username = user.Email
-            };
-
-            return Result.Success(response);
+            });
         }
     }
 }

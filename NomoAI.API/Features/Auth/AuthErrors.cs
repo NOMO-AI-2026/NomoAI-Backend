@@ -9,5 +9,7 @@ namespace NomoAI.API.Features.Auth
         public static readonly Error UserNotFound = new("Auth.UserNotFound", "User not found.", 404);
         public static readonly Error InvalidToken = new("Auth.InvalidToken", "The provided token is invalid or expired.", 401);
         public static readonly Error UnauthorizedAccess = new("Auth.UnauthorizedAccess", "You do not have permission to access this resource.", 403);
+        public static readonly Error EmailNotConfirmed = new("Auth.EmailNotConfirmed", "You must confirm your email address.", 400);
+        public static readonly Error UserRegistrationFailed = new("Auth.UserRegistrationFailed", "User Registration Failed, Try Again", 400);
     }
 }

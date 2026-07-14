@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common;
+using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Persistence;
 using System.Reflection;
@@ -19,7 +20,12 @@ namespace NomoAI.API
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            builder.Services.AddSwaggerGen(options =>
+            {
+                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                options.IncludeXmlComments(xmlPath);
+            });
 
             builder.Services.AddDbContext<AppDbContext>(options =>
             {
@@ -45,14 +51,17 @@ namespace NomoAI.API
 
             builder.Services.AddEndpoints(Assembly.GetExecutingAssembly());
 
+            //jwt 
+            builder.Services.AddScoped<IJwtService, JwtService>();  
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
+            //if (app.Environment.IsDevelopment())
+            //{
                 app.UseSwagger();
                 app.UseSwaggerUI();
-            }
+           // }
 
             app.UseHttpsRedirection();
 

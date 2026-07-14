@@ -8,6 +8,8 @@ namespace NomoAI.API.Features.Auth.Register_User
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
+            /// <param name="Gender">Male = 0 , Female = 1</param>
+            /// <param name="Role">Doctor = 0 , Parent = 1</param>
             app.MapPost("/api/auth/register",
                 async (
                     RegisterRequestDto request,
@@ -17,7 +19,7 @@ namespace NomoAI.API.Features.Auth.Register_User
                     var command = new RegisterUserCommand
                     {
                         FullName = request.FullName,
-                        Username = request.Username,
+                        Email = request.Email,
                         Password = request.Password,
                         Gender = request.Gender,
                         Age = request.Age,

@@ -8,6 +8,7 @@
                 throw new InvalidOperationException();
 
             IsSuccess = isSuccess;
+            IsFailure= !isSuccess;
             Error = error;
         }
         public bool IsSuccess { get; set; }

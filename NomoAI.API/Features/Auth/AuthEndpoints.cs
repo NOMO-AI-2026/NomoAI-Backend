@@ -1,5 +1,7 @@
-﻿using NomoAI.API.Features.Auth.ForgotPassword;
+﻿using NomoAI.API.Features.Auth.ConfirmEmail;
+using NomoAI.API.Features.Auth.ForgotPassword;
 using NomoAI.API.Features.Auth.Login_User;
+using NomoAI.API.Features.Auth.ResendEmailConfirmation;
 using NomoAI.API.Features.Auth.ResetPassword;
 
 namespace NomoAI.API.Features.Auth;
@@ -16,12 +18,14 @@ public static class AuthEndpoints
 		//LoginEndpoint.MapEndpoint(authGroup);
 		ForgotPasswordEndpoint.MapEndpoint(authGroup);
 		ResetPasswordEndpoint.MapEndpoint(authGroup);
+		ConfirmEmailEndpoint.MapEndpoint(authGroup);
+		ResendEmailConfirmationEndpoint.MapEndpoint(authGroup);
 
-		// Add the other authentication endpoints here.
-		// RegisterEndpoint.MapEndpoint(authGroup);
-		// ConfirmEmailEndpoint.MapEndpoint(authGroup);
-		// ResendEmailConfirmationEndpoint.MapEndpoint(authGroup);
+        // Add the other authentication endpoints here.
+        // RegisterEndpoint.MapEndpoint(authGroup);
+        // ConfirmEmailEndpoint.MapEndpoint(authGroup);
+        // ResendEmailConfirmationEndpoint.MapEndpoint(authGroup);
 
-		return app;
+        return app;
 	}
 }

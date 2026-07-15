@@ -3,6 +3,9 @@
 	public class FrontendOptions
 	{
 		public const string SectionName = "Frontend";
-		public string ResetPasswordUrl { get; init; } = string.Empty;
-	}
+        public string BaseUrl { get; init; } = string.Empty;
+        public string ResetPasswordUrl { get; init; } = string.Empty;
+        public string ConfirmEmailUrl { get; init; } = string.Empty;
+
+    }
 }

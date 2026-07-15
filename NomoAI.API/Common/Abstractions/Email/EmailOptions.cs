@@ -3,8 +3,11 @@
 public sealed class EmailOptions
 {
 	public const string SectionName = "Email";
+    public string FrontendBaseUrl { get; init; } = string.Empty;
 
-	public string Host { get; init; } = string.Empty;
+    public string ConfirmEmailPath { get; init; } = "/confirm-email";
+
+    public string Host { get; init; } = string.Empty;
 
 	public int Port { get; init; } = 587;
 

@@ -26,10 +26,9 @@ public static class ResetPasswordEndpoint
 
 		if (result.IsFailure)
 		{
-			return Results.BadRequest(result.Error);
+			return result.ToProblem();
 		}
-
-		return Results.Ok(new ResetPasswordResponse("Your password has been reset successfully."));
+		return Results.Ok(result);
 	}
 }
 

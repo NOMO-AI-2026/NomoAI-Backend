@@ -44,6 +44,8 @@ namespace NomoAI.API
                 options.Password.RequireNonAlphanumeric = false;
                 options.Password.RequireUppercase = false;
                 options.Password.RequireLowercase = false;
+                options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedEmail = true;
             }).AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
 
@@ -58,9 +60,11 @@ namespace NomoAI.API
 			builder.Services.AddSingleton<IValidateOptions<EmailOptions>,EmailOptionsValidator>();
 
 			builder.Services.AddScoped<IEmailSender,SmtpEmailSender>();
-			
 
-			builder.Services.AddMediatR(cfg =>
+            builder.Services.Configure<FrontendOptions>(
+    builder.Configuration.GetSection("Frontend"));
+
+            builder.Services.AddMediatR(cfg =>
             {
                 cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
             });

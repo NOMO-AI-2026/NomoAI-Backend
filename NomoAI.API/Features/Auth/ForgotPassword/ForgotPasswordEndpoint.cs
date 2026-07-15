@@ -20,17 +20,17 @@ public static class ForgotPasswordEndpoint
 				StatusCodes.Status400BadRequest);
 	}
 
-	private static async Task<IResult> HandleAsync(ForgotPasswordCommand command,ISender sender,CancellationToken cancellationToken)
+	private static async Task<IResult> HandleAsync(ForgotPasswordCommand command, ISender sender, CancellationToken cancellationToken)
 	{
-		var result = await sender.Send(command,cancellationToken);
+		var result = await sender.Send(command, cancellationToken);
 
 		if (result.IsFailure)
 		{
-			return Results.BadRequest(result.Error);
+			return result.ToProblem();
 		}
 
-		return Results.Ok(new ForgotPasswordResponse("If an account exists for this email, "+"a password reset link has been sent."));
+		return Results.Ok(result);
 	}
 }
 
-public sealed record ForgotPasswordResponse(string Message);
+	public sealed record ForgotPasswordResponse(string Message); 

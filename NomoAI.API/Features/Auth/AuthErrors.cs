@@ -11,5 +11,6 @@ namespace NomoAI.API.Features.Auth
         public static readonly Error UnauthorizedAccess = new("Auth.UnauthorizedAccess", "You do not have permission to access this resource.", 403);
         public static readonly Error EmailNotConfirmed = new("Auth.EmailNotConfirmed", "You must confirm your email address.", 400);
         public static readonly Error UserRegistrationFailed = new("Auth.UserRegistrationFailed", "User Registration Failed, Try Again", 400);
-    }
+		public static Error PasswordResetFailed(string description) =>new("Auth.PasswordResetFailed", description, 400);
+	}
 }

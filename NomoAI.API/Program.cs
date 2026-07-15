@@ -1,9 +1,14 @@
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NomoAI.API.Common;
+using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
+using NomoAI.API.Features.Auth;
+using NomoAI.API.Infrastructure.Email;
 using NomoAI.API.Persistence;
 using System.Reflection;
 
@@ -42,9 +47,20 @@ namespace NomoAI.API
             }).AddEntityFrameworkStores<AppDbContext>()
             .AddDefaultTokenProviders();
 
+            /////// Email Service /////
+           builder.Services
+    .AddOptions<EmailOptions>()
+	.Bind(
+		builder.Configuration.GetSection(
+			EmailOptions.SectionName))
+	.ValidateOnStart();
 
+			builder.Services.AddSingleton<IValidateOptions<EmailOptions>,EmailOptionsValidator>();
 
-            builder.Services.AddMediatR(cfg =>
+			builder.Services.AddScoped<IEmailSender,SmtpEmailSender>();
+			
+
+			builder.Services.AddMediatR(cfg =>
             {
                 cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
             });
@@ -68,7 +84,7 @@ namespace NomoAI.API
             app.UseAuthorization();
 
             app.MapEndpoints();
-
+            app.MapAuthEndpoints();
             app.MapControllers();
 
             app.Run();

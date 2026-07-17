@@ -50,7 +50,8 @@ namespace NomoAI.API.Features.Auth.Register_User
                 Email = email,
                 Fullname = request.FullName,
                 Age = request.Age,
-                Gender = request.Gender
+                Gender = request.Gender,
+                PhoneNumber = request.PhoneNumber
             };
 
             var createResult =

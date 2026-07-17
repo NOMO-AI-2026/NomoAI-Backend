@@ -27,6 +27,8 @@ namespace NomoAI.API.Persistence
 
         public DbSet<SpeechLevel> SpeechLevels { get; set; }
 
+        public DbSet<Doctor> Doctor { get; set; }
+
         public DbSet<ChildSpeechLevelHistory> ChildSpeechLevelHistories { get; set; }
 
         public DbSet<ChildProgressAlert> ChildProgressAlerts { get; set; }

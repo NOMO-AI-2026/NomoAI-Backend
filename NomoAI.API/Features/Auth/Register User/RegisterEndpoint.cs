@@ -34,6 +34,11 @@ namespace NomoAI.API.Features.Auth.Register_User
                 })
                 .WithName("Register")
                 .WithTags("Authentication")
+                .WithSummary("Register a new user to the system. Parent or Doctor")
+                .WithDescription(
+                    "Registers a new user to the system. " +
+                    "The user can be either a parent or a doctor, depending on the role specified in the request.\n" + 
+                    "Role = 0 => Doctor , Role = 1 => Parent\n"+"Gender = 0 => Male , Gender = 1 => Female")
                 .Produces<Result<RegisterResponseDto>>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status400BadRequest);
         }

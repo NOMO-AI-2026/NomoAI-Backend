@@ -7,12 +7,10 @@
     <UserSecretsId>f4594517-a0cc-44c8-ad6b-1633111ec866</UserSecretsId>
   </PropertyGroup>
 	
-	<PropertyGroup>
-		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<NoWarn>$(NoWarn);1591</NoWarn>
-	</PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="12.0.0" />
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.0" />
     <PackageReference Include="FluentValidation" Version="8.6.3" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="8.6.3" />
     <PackageReference Include="MailKit" Version="4.17.0" />

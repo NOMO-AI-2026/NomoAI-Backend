@@ -1,18 +1,19 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
-using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
 using NomoAI.API.Features.Auth;
 using NomoAI.API.Features.Children;
 using NomoAI.API.Features.Parents;
+using NomoAI.API.Infrastructure;
 using NomoAI.API.Infrastructure.Email;
 using NomoAI.API.Persistence;
 using System.Reflection;
@@ -33,11 +34,12 @@ namespace NomoAI.API
             builder.Services.AddEndpointsApiExplorer();
 
             //Swagger Configuration
-            builder.Services.AddSwaggerGen(options =>
+            builder.Services.AddSwaggerGen(
+            options =>
             {
-                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-                options.IncludeXmlComments(xmlPath);
+                //var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                //var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                //options.IncludeXmlComments(xmlPath);
 
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
@@ -91,13 +93,15 @@ namespace NomoAI.API
             });
 
             //Auth
-            builder.Services.AddAuthentication(options => {
+            builder.Services.AddAuthentication(options =>
+            {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 //[authore ]:found toke or not
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
                 //account/loginresonse unauthorize
                 options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-            }).AddJwtBearer(options => {
+            }).AddJwtBearer(options =>
+            {
                 options.SaveToken = true;
                 options.RequireHttpsMetadata = false;
                 options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
@@ -135,7 +139,10 @@ namespace NomoAI.API
             builder.Services.AddEndpoints(Assembly.GetExecutingAssembly());
 
             //jwt 
-            builder.Services.AddScoped<IJwtService, JwtService>();  
+            builder.Services.AddScoped<IJwtService, JwtService>();
+
+            //Auto Mapper
+            builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);
 
             var app = builder.Build();
 

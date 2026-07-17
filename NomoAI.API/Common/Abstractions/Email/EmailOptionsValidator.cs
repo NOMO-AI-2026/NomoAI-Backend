@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 
-namespace NomoAI.API.Common.Email;
+namespace NomoAI.API.Common.Abstractions.Email;
 
 public sealed class EmailOptionsValidator
 	: IValidateOptions<EmailOptions>

@@ -2,12 +2,12 @@
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Enums;
 
-namespace NomoAI.API.Features.Activities.UpdateActivity;
+namespace NomoAI.API.Features.Activities.CreateActivity;
 
-public sealed record UpdateActivityCommand(
-    int ActivityId,
+public sealed record CreateActivityCommand(
+    int ChildId,
     ActivityTargetType ActivityTarget,
     string Content,
     int EstimatedDurationMinutes,
     string DoctorUserId)
-    : IRequest<Result<UpdateActivityResponse>>;
+    : IRequest<Result<CreateActivityResponse>>;

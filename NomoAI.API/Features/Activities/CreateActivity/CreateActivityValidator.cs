@@ -1,27 +1,24 @@
 ﻿using FluentValidation;
 
-namespace NomoAI.API.Features.Activities.UpdateActivity;
+namespace NomoAI.API.Features.Activities.CreateActivity;
 
-public sealed class UpdateActivityValidator
-    : AbstractValidator<UpdateActivityCommand>
+public sealed class CreateActivityValidator
+    : AbstractValidator<CreateActivityCommand>
 {
-    public UpdateActivityValidator()
+    public CreateActivityValidator()
     {
-        RuleFor(command => command.ActivityId)
+        RuleFor(command => command.ChildId)
             .GreaterThan(0)
-            .WithMessage(
-                "Activity ID must be greater than zero.");
+            .WithMessage("Child ID must be greater than zero.");
 
         RuleFor(command => command.ActivityTarget)
             .IsInEnum()
-            .WithMessage(
-                "Activity target type is invalid.");
+            .WithMessage("Activity target type is invalid.");
 
         RuleFor(command => command.Content)
             .Cascade(CascadeMode.StopOnFirstFailure)
             .NotEmpty()
-            .WithMessage(
-                "Activity content is required.")
+            .WithMessage("Activity content is required.")
             .MaximumLength(500)
             .WithMessage(
                 "Activity content cannot exceed 500 characters.");
@@ -33,7 +30,6 @@ public sealed class UpdateActivityValidator
 
         RuleFor(command => command.DoctorUserId)
             .NotEmpty()
-            .WithMessage(
-                "Authenticated doctor ID is required.");
+            .WithMessage("Authenticated doctor ID is required.");
     }
 }

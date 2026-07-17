@@ -1,9 +1,10 @@
-
+using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.Behaviors;
 using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
@@ -21,72 +22,102 @@ namespace NomoAI.API
     {
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add services to the container.
+            var builder =
+                WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
             builder.Services.AddEndpointsApiExplorer();
+
             builder.Services.AddSwaggerGen(options =>
             {
-                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                var xmlFile =
+                    $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+
+                var xmlPath =
+                    Path.Combine(
+                        AppContext.BaseDirectory,
+                        xmlFile);
+
                 options.IncludeXmlComments(xmlPath);
             });
 
-            builder.Services.AddDbContext<AppDbContext>(options =>
-            {
-                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-            });
+            builder.Services.AddDbContext<AppDbContext>(
+                options =>
+                {
+                    options.UseSqlServer(
+                        builder.Configuration
+                            .GetConnectionString(
+                                "DefaultConnection"));
+                });
 
-            builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-            {
-                options.Password.RequireDigit = false;
-                options.Password.RequiredLength = 4;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequireLowercase = false;
-                options.User.RequireUniqueEmail = true;
-                options.SignIn.RequireConfirmedEmail = true;
-            }).AddEntityFrameworkStores<AppDbContext>()
-            .AddDefaultTokenProviders();
+            builder.Services
+                .AddIdentity<ApplicationUser, IdentityRole>(
+                    options =>
+                    {
+                        options.Password.RequireDigit = false;
+                        options.Password.RequiredLength = 4;
+                        options.Password
+                            .RequireNonAlphanumeric = false;
+                        options.Password.RequireUppercase = false;
+                        options.Password.RequireLowercase = false;
 
-            /////// Email Service /////
-           builder.Services
-    .AddOptions<EmailOptions>()
-	.Bind(
-		builder.Configuration.GetSection(
-			EmailOptions.SectionName))
-	.ValidateOnStart();
+                        options.User.RequireUniqueEmail = true;
 
-			builder.Services.AddSingleton<IValidateOptions<EmailOptions>,EmailOptionsValidator>();
+                        options.SignIn
+                            .RequireConfirmedEmail = true;
+                    })
+                .AddEntityFrameworkStores<AppDbContext>()
+                .AddDefaultTokenProviders();
 
-			builder.Services.AddScoped<IEmailSender,SmtpEmailSender>();
+            // Email service
+            builder.Services
+                .AddOptions<EmailOptions>()
+                .Bind(
+                    builder.Configuration.GetSection(
+                        EmailOptions.SectionName))
+                .ValidateOnStart();
+
+            builder.Services.AddSingleton<
+                IValidateOptions<EmailOptions>,
+                EmailOptionsValidator>();
+
+            builder.Services.AddScoped<
+                IEmailSender,
+                SmtpEmailSender>();
 
             builder.Services.Configure<FrontendOptions>(
-    builder.Configuration.GetSection("Frontend"));
+                builder.Configuration.GetSection(
+                    "Frontend"));
 
-            builder.Services.AddMediatR(cfg =>
+            // Register all FluentValidation validators
+            builder.Services.AddValidatorsFromAssembly(
+                Assembly.GetExecutingAssembly());
+
+            // Register MediatR and validation pipeline
+            builder.Services.AddMediatR(configuration =>
             {
-                cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+                configuration.RegisterServicesFromAssembly(
+                    Assembly.GetExecutingAssembly());
+
+                configuration.AddOpenBehavior(
+                    typeof(ValidationBehavior<,>));
             });
 
-            builder.Services.AddEndpoints(Assembly.GetExecutingAssembly());
+            builder.Services.AddEndpoints(
+                Assembly.GetExecutingAssembly());
 
-            //jwt 
-            builder.Services.AddScoped<IJwtService, JwtService>();  
+            builder.Services.AddScoped<
+                IJwtService,
+                JwtService>();
 
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
-            //if (app.Environment.IsDevelopment())
-            //{
-                app.UseSwagger();
-                app.UseSwaggerUI();
-           // }
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
             app.UseHttpsRedirection();
+
             app.UseAuthentication();
             app.UseAuthorization();
 

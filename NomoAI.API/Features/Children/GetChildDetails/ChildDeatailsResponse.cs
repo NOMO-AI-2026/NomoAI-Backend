@@ -1,4 +1,5 @@
 ﻿using NomoAI.API.Domain.Enums;
+using NomoAI.API.Features.SpeechLevels.GetAllLevels;
 
 namespace NomoAI.API.Features.Children.GetChildDetails
 {
@@ -15,5 +16,7 @@ namespace NomoAI.API.Features.Children.GetChildDetails
         public  string? ParentEmail { get; set; }
 
         public string? ParentPhoneNumber { get; set; }
+
+        public SpeechLevelResponse speechLevel { get; set; } 
     }
 }

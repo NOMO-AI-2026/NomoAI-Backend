@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Features.SpeechLevels.GetAllLevels;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Children.GetChildDetails
@@ -28,7 +29,13 @@ namespace NomoAI.API.Features.Children.GetChildDetails
                     Age = c.Age,
                     ParentFullName = c.Parent != null ? c.Parent.User.Fullname : null,
                     ParentEmail = c.Parent != null ? c.Parent.User.Email ?? string.Empty : null,
-                    ParentPhoneNumber = c.Parent != null ? c.Parent.User.PhoneNumber : null
+                    ParentPhoneNumber = c.Parent != null ? c.Parent.User.PhoneNumber : null,
+                    speechLevel = new SpeechLevelResponse
+                    {
+                        Id = c.SpeechLevel.Id,
+                        LevelName = c.SpeechLevel.LevelName
+                    } 
+
                 })
                 .SingleOrDefaultAsync(cancellationToken);
 

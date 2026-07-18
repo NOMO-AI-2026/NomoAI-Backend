@@ -8,7 +8,7 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
-            app.MapGet("/children/{childId:int}/activities", async (int childId, IMediator mediator) =>
+            app.MapGet("api/children/{childId:int}/activities", async (int childId, IMediator mediator) =>
             {
                 var query = new GetChildActivityListQuery(childId);
                 var result = await mediator.Send(query);

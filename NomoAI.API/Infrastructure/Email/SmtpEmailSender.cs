@@ -3,8 +3,6 @@ using MailKit.Security;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using NomoAI.API.Common.Abstractions.Email;
-using NomoAI.API.Common.Email;
-
 namespace NomoAI.API.Infrastructure.Email;
 
 public sealed class SmtpEmailSender : IEmailSender

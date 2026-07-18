@@ -31,6 +31,8 @@ namespace NomoAI.API.Features.Children.Add_Child
                     : result.ToProblem();
             })
              .WithTags("Children")
+             .WithSummary("Add a new child to the list of children for the authenticated doctor.")
+             .WithDescription("A Doctor adds a new child to his list of children.")
             .RequireAuthorization(policy => policy.RequireRole("Doctor"));
         }
     }

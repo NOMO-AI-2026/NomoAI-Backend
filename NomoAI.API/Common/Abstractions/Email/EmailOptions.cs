@@ -1,4 +1,4 @@
-﻿namespace NomoAI.API.Common.Email;
+﻿namespace NomoAI.API.Common.Abstractions.Email;
 
 public sealed class EmailOptions
 {

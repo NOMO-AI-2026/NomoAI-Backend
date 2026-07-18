@@ -8,7 +8,7 @@ public static class SearchParentsEndpoint
     public static void MapEndpoint(RouteGroupBuilder group)
     {
         group
-            .MapGet("/search", HandleAsync)
+            .MapGet("api/parents/search", HandleAsync)
             .AllowAnonymous()
             .WithName("SearchParents")
             .WithSummary("Search for parents")

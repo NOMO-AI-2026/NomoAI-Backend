@@ -8,7 +8,7 @@ namespace NomoAI.API.Features.Children.GetChildDetails
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
-            app.MapGet("/children/{childId:int}", async (int childId, IMediator mediator) =>
+            app.MapGet("api/children/{childId:int}", async (int childId, IMediator mediator) =>
             {
                 var query = new GetChildDeatilsQuery(childId);
                 var result = await mediator.Send(query);

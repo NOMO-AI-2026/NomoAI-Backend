@@ -8,7 +8,7 @@ namespace NomoAI.API.Features.Children.UpdateChildData
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
-            app.MapPut("/children/{childId:int}", async (int childId, UpdateChildRequest request, IMediator mediator) =>
+            app.MapPut("api/children/{childId:int}", async (int childId, UpdateChildRequest request, IMediator mediator) =>
             {
                 var command = new UpdateChildCommand(childId)
                 {

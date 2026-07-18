@@ -9,7 +9,6 @@ using Microsoft.OpenApi.Models;
 using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.Behaviors;
-using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
@@ -37,15 +36,7 @@ namespace NomoAI.API
             builder.Services.AddSwaggerGen(
             options =>
             {
-                //var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-                //var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-                //options.IncludeXmlComments(xmlPath);
-
-                var xmlPath =
-                    Path.Combine(AppContext.BaseDirectory, xmlFile);
-
-                options.IncludeXmlComments(xmlPath);
-
+               
                 options.AddSecurityDefinition(
                     "Bearer",
                     new OpenApiSecurityScheme
@@ -118,50 +109,29 @@ namespace NomoAI.API
             builder.Services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                //[authore ]:found toke or not
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                //account/loginresonse unauthorize
                 options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-            }).AddJwtBearer(options =>
+            })
+            .AddJwtBearer(options =>
             {
-                options.SaveToken = true;
-                options.RequireHttpsMetadata = false;
-                options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
-                {
-                    options.DefaultAuthenticateScheme =
-                        JwtBearerDefaults.AuthenticationScheme;
+            options.SaveToken = true;
+            options.RequireHttpsMetadata = false;
 
-                    options.DefaultChallengeScheme =
-                        JwtBearerDefaults.AuthenticationScheme;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = builder.Configuration["Jwt:Issuer"],
 
-                    options.DefaultScheme =
-                        JwtBearerDefaults.AuthenticationScheme;
-                })
-                .AddJwtBearer(options =>
-                {
-                    options.SaveToken = true;
-                    options.RequireHttpsMetadata = false;
+                ValidateAudience = true,
+                ValidAudience = builder.Configuration["Jwt:Audience"],
 
-                    options.TokenValidationParameters =
-                        new TokenValidationParameters
-                        {
-                            ValidateIssuer = true,
-                            ValidIssuer =
-                                builder.Configuration["Jwt:Issuer"],
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
 
-                            ValidateAudience = true,
-                            ValidAudience =
-                                builder.Configuration["Jwt:Audience"],
-
-                            ValidateLifetime = true,
-                            ValidateIssuerSigningKey = true,
-
-                            IssuerSigningKey =
-                                new SymmetricSecurityKey(
-                                    Encoding.UTF8.GetBytes(
-                                        builder.Configuration["Jwt:Key"]!))
-                        };
-                });
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+            };
+            });
 
             // Email service
             builder.Services

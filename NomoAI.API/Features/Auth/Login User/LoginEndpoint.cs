@@ -12,9 +12,7 @@ namespace NomoAI.API.Features.Auth.Login_User
             {
                 var result = await sender.Send(command);
 
-                return result.IsSuccess
-                    ? Results.Ok(result)
-                    : result.ToProblem();
+                return result.IsSuccess? Results.Ok(result): result.ToProblem();
             })
         .WithName("Login")
         .WithTags("Authentication")

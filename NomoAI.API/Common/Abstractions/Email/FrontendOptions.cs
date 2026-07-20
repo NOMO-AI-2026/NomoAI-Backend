@@ -7,5 +7,8 @@
         public string ResetPasswordUrl { get; init; } = string.Empty;
         public string ConfirmEmailUrl { get; init; } = string.Empty;
 
+
+        public string ConfirmEmailChangePageUrl { get; init; }
+      = string.Empty;
     }
 }

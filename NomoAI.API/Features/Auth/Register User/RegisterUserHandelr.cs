@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Identity;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
@@ -36,16 +36,15 @@ public sealed class RegisterUserHandler(
                 AuthErrors.UserAlreadyExists);
         }
 
-        var user =
-            new ApplicationUser
-            {
-                UserName = email,
-                Email = email,
-                Fullname = request.FullName,
-                Age = request.Age,
-                Gender = request.Gender,
-                PhoneNumber = request.PhoneNumber
-            };
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            Fullname = request.FullName,
+            Age = request.Age,
+            Gender = request.Gender,
+            PhoneNumber = request.PhoneNumber
+        };
 
         IdentityResult createResult =
             await userManager.CreateAsync(
@@ -111,7 +110,6 @@ public sealed class RegisterUserHandler(
         await dbContext.SaveChangesAsync(
             cancellationToken);
 
-       
         await TrySendConfirmationOtpAsync(
             user,
             emailOtpService,
@@ -124,7 +122,7 @@ public sealed class RegisterUserHandler(
             {
                 UserId = user.Id,
                 FullName = user.Fullname,
-                Username = user.Email
+                Username = user.Email ?? email
             });
     }
 
@@ -153,7 +151,6 @@ public sealed class RegisterUserHandler(
 
         if (otpResult.IsFailure)
         {
-            
             logger.LogError(
                 "Failed to create confirmation OTP for user {UserId}. ErrorCode: {ErrorCode}.",
                 user.Id,
@@ -180,8 +177,9 @@ public sealed class RegisterUserHandler(
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport"
-                      content="width=device-width, initial-scale=1.0">
+                <meta
+                    name="viewport"
+                    content="width=device-width, initial-scale=1.0">
             </head>
 
             <body style="
@@ -271,7 +269,6 @@ public sealed class RegisterUserHandler(
         }
         catch (Exception exception)
         {
-            
             logger.LogError(
                 exception,
                 "Failed to send confirmation OTP email for user {UserId}.",

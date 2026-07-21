@@ -1,6 +1,6 @@
-﻿using MediatR;
+﻿using System.Security.Claims;
+using MediatR;
 using NomoAI.API.Common.Abstractions;
-using System.Security.Claims;
 
 namespace NomoAI.API.Features.Auth.ChangeEmail;
 
@@ -18,32 +18,32 @@ public static class ChangeEmailEndpoint
             .WithSummary(
                 "Request an email address change")
             .WithDescription(
-                "Validates the current password and sends " +
-                "a confirmation link to the new email address.")
+                "Verifies the current password and sends " +
+                "an OTP to the new email address.")
             .Accepts<ChangeEmailRequest>(
                 "application/json")
             .Produces<ChangeEmailResponse>(
                 StatusCodes.Status200OK)
             .Produces<Error>(
                 StatusCodes.Status400BadRequest)
-            .Produces(
+            .Produces<Error>(
                 StatusCodes.Status401Unauthorized)
             .Produces<Error>(
-                StatusCodes.Status404NotFound)
-            .Produces<Error>(
                 StatusCodes.Status409Conflict)
+            .Produces<Error>(
+                StatusCodes.Status429TooManyRequests)
             .Produces<Error>(
                 StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<IResult> HandleAsync(
         ChangeEmailRequest request,
-        ClaimsPrincipal currentUser,
+        ClaimsPrincipal claimsPrincipal,
         ISender sender,
         CancellationToken cancellationToken)
     {
         string? userId =
-            currentUser.FindFirstValue(
+            claimsPrincipal.FindFirstValue(
                 ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
@@ -51,12 +51,13 @@ public static class ChangeEmailEndpoint
             return Results.Unauthorized();
         }
 
-        var command = new ChangeEmailCommand(
-            userId,
-            request.NewEmail,
-            request.CurrentPassword);
+        var command =
+            new ChangeEmailCommand(
+                userId,
+                request.CurrentPassword,
+                request.NewEmail);
 
-        Result<ChangeEmailResponse> result =
+        Result result =
             await sender.Send(
                 command,
                 cancellationToken);
@@ -69,6 +70,9 @@ public static class ChangeEmailEndpoint
                     result.Error.StatusCode);
         }
 
-        return Results.Ok(result.Value);
+        return Results.Ok(
+            new ChangeEmailResponse(
+                "A verification code has been sent " +
+                "to the new email address."));
     }
 }

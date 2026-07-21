@@ -1,32 +1,38 @@
 ﻿using FluentValidation;
+using Microsoft.Extensions.Options;
+using NomoAI.API.Common.EmailOtp;
 
 namespace NomoAI.API.Features.Auth.ConfirmEmailChange;
 
 public sealed class ConfirmEmailChangeValidator
     : AbstractValidator<ConfirmEmailChangeCommand>
 {
-    public ConfirmEmailChangeValidator()
+    public ConfirmEmailChangeValidator(
+        IOptions<EmailOtpOptions> otpOptions)
     {
+        int otpLength =
+            otpOptions.Value.Length;
+
         RuleFor(command => command.UserId)
             .NotEmpty()
-            .WithMessage(
-                "User ID is required.");
+            .WithMessage("User ID is required.");
 
-        RuleFor(command => command.NewEmail)
+        RuleFor(command => command.Otp)
             .Cascade(CascadeMode.StopOnFirstFailure)
             .NotEmpty()
             .WithMessage(
-                "New email address is required.")
-            .EmailAddress()
-            .WithMessage(
-                "New email address is invalid.")
-            .MaximumLength(256)
-            .WithMessage(
-                "Email address cannot exceed 256 characters.");
+                "Verification code is required.")
+            .Must(otp =>
+            {
+                string normalizedOtp =
+                    otp.Trim();
 
-        RuleFor(command => command.Token)
-            .NotEmpty()
+                return
+                    normalizedOtp.Length == otpLength &&
+                    normalizedOtp.All(char.IsDigit);
+            })
             .WithMessage(
-                "Email change token is required.");
+                $"Verification code must contain exactly " +
+                $"{otpLength} digits.");
     }
 }

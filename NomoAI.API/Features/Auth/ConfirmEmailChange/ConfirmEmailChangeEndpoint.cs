@@ -1,4 +1,5 @@
-﻿using MediatR;
+﻿using System.Security.Claims;
+using MediatR;
 using NomoAI.API.Common.Abstractions;
 
 namespace NomoAI.API.Features.Auth.ConfirmEmailChange;
@@ -12,13 +13,13 @@ public static class ConfirmEmailChangeEndpoint
             .MapPost(
                 "/confirm-email-change",
                 HandleAsync)
-            .AllowAnonymous()
+            .RequireAuthorization()
             .WithName("ConfirmEmailChange")
             .WithSummary(
-                "Confirm a new email address")
+                "Confirm changing the user's email using OTP")
             .WithDescription(
-                "Validates the email change token and " +
-                "updates the user's email address.")
+                "Validates the OTP sent to the new email " +
+                "address and completes the email change.")
             .Accepts<ConfirmEmailChangeRequest>(
                 "application/json")
             .Produces<ConfirmEmailChangeResponse>(
@@ -26,23 +27,36 @@ public static class ConfirmEmailChangeEndpoint
             .Produces<Error>(
                 StatusCodes.Status400BadRequest)
             .Produces<Error>(
-                StatusCodes.Status404NotFound)
+                StatusCodes.Status401Unauthorized)
             .Produces<Error>(
-                StatusCodes.Status409Conflict);
+                StatusCodes.Status409Conflict)
+            .Produces<Error>(
+                StatusCodes.Status429TooManyRequests)
+            .Produces<Error>(
+                StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<IResult> HandleAsync(
         ConfirmEmailChangeRequest request,
+        ClaimsPrincipal claimsPrincipal,
         ISender sender,
         CancellationToken cancellationToken)
     {
+        string? userId =
+            claimsPrincipal.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Results.Unauthorized();
+        }
+
         var command =
             new ConfirmEmailChangeCommand(
-                request.UserId,
-                request.NewEmail,
-                request.Token);
+                userId,
+                request.Otp);
 
-        Result<ConfirmEmailChangeResponse> result =
+        Result result =
             await sender.Send(
                 command,
                 cancellationToken);
@@ -55,6 +69,8 @@ public static class ConfirmEmailChangeEndpoint
                     result.Error.StatusCode);
         }
 
-        return Results.Ok(result.Value);
+        return Results.Ok(
+            new ConfirmEmailChangeResponse(
+                "Email address changed successfully."));
     }
 }

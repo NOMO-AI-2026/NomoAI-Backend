@@ -5,32 +5,57 @@ namespace NomoAI.API.Features.Auth.ResendEmailConfirmation;
 
 public static class ResendEmailConfirmationEndpoint
 {
-    public static void MapEndpoint(RouteGroupBuilder group)
+    public static void MapEndpoint(
+        RouteGroupBuilder group)
     {
         group
-            .MapPost("/resend-email-confirmation", HandleAsync)
+            .MapPost(
+                "/resend-email-confirmation",
+                HandleAsync)
             .AllowAnonymous()
             .WithName("ResendEmailConfirmation")
-            .WithSummary("Resend email confirmation")
+            .WithSummary(
+                "Resend the email confirmation OTP")
             .WithDescription(
-                "Sends a new email confirmation link if the email belongs to an unconfirmed account.")
+                "Creates and sends a new email verification " +
+                "code when the resend cooldown has expired.")
+            .Accepts<ResendEmailConfirmationRequest>(
+                "application/json")
             .Produces<ResendEmailConfirmationResponse>(
                 StatusCodes.Status200OK)
             .Produces<Error>(
-                StatusCodes.Status400BadRequest);
+                StatusCodes.Status400BadRequest)
+            .Produces<Error>(
+                StatusCodes.Status429TooManyRequests)
+            .Produces<Error>(
+                StatusCodes.Status503ServiceUnavailable);
     }
 
-    private static async Task<IResult> HandleAsync(ResendEmailConfirmationCommand command, ISender sender, CancellationToken cancellationToken)
+    private static async Task<IResult> HandleAsync(
+        ResendEmailConfirmationRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
     {
-        var result = await sender.Send(command, cancellationToken);
+        var command =
+            new ResendEmailConfirmationCommand(
+                request.UserId);
+
+        Result result =
+            await sender.Send(
+                command,
+                cancellationToken);
 
         if (result.IsFailure)
         {
-            return result.ToProblem();
+            return Results.Json(
+                result.Error,
+                statusCode:
+                    result.Error.StatusCode);
         }
 
-        return Results.Ok(new ResendEmailConfirmationResponse("If an account with this email exists and is unconfirmed, a confirmation email has been sent."));
+        return Results.Ok(
+            new ResendEmailConfirmationResponse(
+                "If the account is eligible, a new " +
+                "verification code has been sent."));
     }
 }
-
-public sealed record ResendEmailConfirmationResponse(string Message);

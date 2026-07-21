@@ -38,10 +38,7 @@ namespace NomoAI.API.Features.Auth
             "The email change token is invalid or expired.",
             StatusCodes.Status400BadRequest);
 
-        public static readonly Error EmailDeliveryFailed = new(
-    "Auth.EmailDeliveryFailed",
-    "The confirmation email could not be sent. Please try again later.",
-    StatusCodes.Status503ServiceUnavailable);
+       
 
         public static Error EmailChangeFailed(
             string description) =>
@@ -49,5 +46,14 @@ namespace NomoAI.API.Features.Auth
                 "Auth.EmailChangeFailed",
                 description,
                 StatusCodes.Status400BadRequest);
+
+
+
+        public static readonly Error EmailDeliveryFailed =
+    new(
+        "Auth.EmailDeliveryFailed",
+        "The verification email could not be sent. Please try again later.",
+        StatusCodes.Status503ServiceUnavailable);
     }
+
 }

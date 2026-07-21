@@ -1,103 +1,163 @@
-﻿using System.Text;
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
 
 namespace NomoAI.API.Features.Auth.ConfirmEmail;
 
-public sealed class ConfirmEmailHandler : IRequestHandler<ConfirmEmailCommand, Result>
+public sealed class ConfirmEmailHandler
+    : IRequestHandler<ConfirmEmailCommand, Result>
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ILogger<ConfirmEmailHandler> _logger;
+    private readonly UserManager<ApplicationUser>
+        _userManager;
+
+    private readonly IEmailOtpService
+        _emailOtpService;
+
+    private readonly ILogger<ConfirmEmailHandler>
+        _logger;
 
     public ConfirmEmailHandler(
         UserManager<ApplicationUser> userManager,
+        IEmailOtpService emailOtpService,
         ILogger<ConfirmEmailHandler> logger)
     {
         _userManager = userManager;
+        _emailOtpService = emailOtpService;
         _logger = logger;
     }
 
-    public async Task<Result> Handle(ConfirmEmailCommand request, CancellationToken cancellationToken)
+    public async Task<Result> Handle(
+        ConfirmEmailCommand request,
+        CancellationToken cancellationToken)
     {
-        var user = await _userManager.FindByIdAsync(request.UserId);
+        ApplicationUser? user =
+            await _userManager.FindByIdAsync(
+                request.UserId);
 
         /*
-         * Return InvalidToken instead of UserNotFound.
-         *
-         * From the client's perspective, an invalid user ID and an invalid
-         * email confirmation token both mean that the confirmation link cannot be used.
+         * لا نكشف هل UserId غير موجود أم الكود خاطئ.
+         * من وجهة نظر المستخدم، عملية التأكيد غير صالحة.
          */
-        if (user is null)
+        if (user is null || user.IsDeleted)
         {
-            return Result.Failure(AuthErrors.InvalidToken);
+            return Result.Failure(
+                AuthErrors.InvalidToken);
         }
 
-        /*
-         * If the email is already confirmed, return success immediately.
-         * This makes the endpoint idempotent.
-         */
         if (user.EmailConfirmed)
         {
             return Result.Success();
         }
 
-        string decodedToken;
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            return Result.Failure(
+                AuthErrors.InvalidToken);
+        }
+
+       
+        Result<Common.EmailOtp.VerifiedEmailOtp>
+            otpResult =
+                await _emailOtpService
+                    .VerifyAndReserveAsync(
+                        user.Id,
+                        request.Otp,
+                        EmailOtpPurpose.ConfirmEmail,
+                        cancellationToken);
+
+        if (otpResult.IsFailure)
+        {
+            return Result.Failure(
+                otpResult.Error);
+        }
+
+        Common.EmailOtp.VerifiedEmailOtp verifiedOtp =
+            otpResult.Value;
+
+        
+        if (!string.Equals(
+            verifiedOtp.TargetEmail,
+            user.Email,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            await _emailOtpService.ReleaseAsync(
+                user.Id,
+                EmailOtpPurpose.ConfirmEmail,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
+
+            _logger.LogWarning(
+                "Confirmation OTP target email does not match " +
+                "the current email for user {UserId}.",
+                user.Id);
+
+            return Result.Failure(
+                AuthErrors.InvalidToken);
+        }
+
+        
+        string identityToken =
+            await _userManager
+                .GenerateEmailConfirmationTokenAsync(
+                    user);
+
+        IdentityResult confirmResult =
+            await _userManager.ConfirmEmailAsync(
+                user,
+                identityToken);
+
+        if (!confirmResult.Succeeded)
+        {
+            
+            await _emailOtpService.ReleaseAsync(
+                user.Id,
+                EmailOtpPurpose.ConfirmEmail,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
+
+            IdentityError[] identityErrors =
+                confirmResult.Errors.ToArray();
+
+            _logger.LogWarning(
+                "Email confirmation failed for user {UserId}. " +
+                "Errors: {Errors}",
+                user.Id,
+                string.Join(
+                    ", ",
+                    identityErrors.Select(error =>
+                        $"{error.Code}: " +
+                        $"{error.Description}")));
+
+            return Result.Failure(
+                AuthErrors.InvalidToken);
+        }
 
         try
         {
-            /*
-             * The token is expected to have been encoded by the client using Base64UrlEncode.
-             * Reverse this operation to get the original Identity token.
-             */
-            var tokenBytes = WebEncoders.Base64UrlDecode(request.Token);
-
-            decodedToken = Encoding.UTF8.GetString(tokenBytes);
+            await _emailOtpService.ConsumeAsync(
+                user.Id,
+                EmailOtpPurpose.ConfirmEmail,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
         }
-        catch (FormatException exception)
+        catch (Exception exception)
         {
-            _logger.LogWarning(
+            
+            _logger.LogError(
                 exception,
-                "Email confirmation token has an invalid format for user {UserId}.",
-                request.UserId);
-
-            return Result.Failure(AuthErrors.InvalidToken);
-        }
-        catch (ArgumentException exception)
-        {
-            _logger.LogWarning(
-                exception,
-                "Email confirmation token could not be decoded for user {UserId}.",
-                request.UserId);
-
-            return Result.Failure(AuthErrors.InvalidToken);
+                "Email was confirmed, but its OTP could not " +
+                "be consumed for user {UserId}.",
+                user.Id);
         }
 
-        var confirmEmailResult = await _userManager.ConfirmEmailAsync(user, decodedToken);
+        _logger.LogInformation(
+            "Email was confirmed successfully using OTP " +
+            "for user {UserId}.",
+            user.Id);
 
-        if (confirmEmailResult.Succeeded)
-        {
-            _logger.LogInformation("Email was confirmed successfully for user {UserId}.", user.Id);
-
-            return Result.Success();
-        }
-
-        var identityErrors = confirmEmailResult.Errors.ToArray();
-
-        _logger.LogWarning(
-            "Email confirmation failed for user {UserId}. Errors: {Errors}",
-            user.Id,
-            string.Join(
-                ", ",
-                identityErrors.Select(error =>
-                    $"{error.Code}: {error.Description}")));
-
-        /*
-         * Return InvalidToken for any confirmation failure.
-         * This includes token expiration and invalid tokens.
-         */
-        return Result.Failure(AuthErrors.InvalidToken);
+        return Result.Success();
     }
 }

@@ -3,4 +3,6 @@ using NomoAI.API.Common.Abstractions;
 
 namespace NomoAI.API.Features.Auth.ForgotPassword;
 
-public sealed record ForgotPasswordCommand(string Email) : IRequest<Result>;
+public sealed record ForgotPasswordCommand(
+    string Email)
+    : IRequest<Result>;

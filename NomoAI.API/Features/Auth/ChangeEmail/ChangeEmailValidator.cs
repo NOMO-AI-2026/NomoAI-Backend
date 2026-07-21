@@ -9,24 +9,20 @@ public sealed class ChangeEmailValidator
     {
         RuleFor(command => command.UserId)
             .NotEmpty()
-            .WithMessage(
-                "Authenticated user ID is required.");
+            .WithMessage("User ID is required.");
+
+        RuleFor(command => command.CurrentPassword)
+            .NotEmpty()
+            .WithMessage("Current password is required.");
 
         RuleFor(command => command.NewEmail)
             .Cascade(CascadeMode.StopOnFirstFailure)
             .NotEmpty()
-            .WithMessage(
-                "New email address is required.")
+            .WithMessage("New email address is required.")
             .EmailAddress()
-            .WithMessage(
-                "New email address is invalid.")
+            .WithMessage("New email address is invalid.")
             .MaximumLength(256)
             .WithMessage(
-                "Email address cannot exceed 256 characters.");
-
-        RuleFor(command => command.CurrentPassword)
-            .NotEmpty()
-            .WithMessage(
-                "Current password is required.");
+                "New email address cannot exceed 256 characters.");
     }
 }

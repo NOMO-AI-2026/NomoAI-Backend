@@ -43,7 +43,7 @@ namespace NomoAI.API.Features.Auth.Register_User
                 return Result.Failure<RegisterResponseDto>(
                     AuthErrors.UserAlreadyExists);
             }
-
+            Console.WriteLine("Phone Number : " + request.PhoneNumber);
             var user = new ApplicationUser
             {
                 UserName = email,
@@ -53,6 +53,7 @@ namespace NomoAI.API.Features.Auth.Register_User
                 Gender = request.Gender,
                 PhoneNumber = request.PhoneNumber
             };
+            Console.WriteLine("Phone Number : " + request.PhoneNumber);
 
             var createResult =
                 await userManager.CreateAsync(

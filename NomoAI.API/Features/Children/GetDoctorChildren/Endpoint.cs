@@ -26,7 +26,8 @@ namespace NomoAI.API.Features.Children.GetDoctorChildren
                 .WithTags("Children")
                 .WithName("GetDoctorChildren")
                  .WithSummary("Get children for a doctor")
-                 .WithDescription("Returns children associated with the specified doctor.");
+                 .WithDescription("Returns children associated with the specified doctor.")
+                 .RequireAuthorization(policy => policy.RequireRole("Doctor"));
         }
 
     }

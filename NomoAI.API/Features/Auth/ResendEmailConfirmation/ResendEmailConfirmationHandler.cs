@@ -1,36 +1,37 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
-using NomoAI.API.Persistence;
-using System.Text;
-using System.Text.Encodings.Web;
 
 namespace NomoAI.API.Features.Auth.ResendEmailConfirmation;
 
-public sealed class ResendEmailConfirmationHandler : IRequestHandler<ResendEmailConfirmationCommand, Result>
+public sealed class ResendEmailConfirmationHandler
+    : IRequestHandler<ResendEmailConfirmationCommand, Result>
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly AppDbContext _dbContext;
-    private readonly IEmailSender _emailSender;
-    private readonly FrontendOptions _frontendOptions;
-    private readonly ILogger<ResendEmailConfirmationHandler> _logger;
+    private readonly UserManager<ApplicationUser>
+        _userManager;
+
+    private readonly IEmailOtpService
+        _emailOtpService;
+
+    private readonly IEmailSender
+        _emailSender;
+
+    private readonly ILogger<ResendEmailConfirmationHandler>
+        _logger;
 
     public ResendEmailConfirmationHandler(
         UserManager<ApplicationUser> userManager,
-        AppDbContext dbContext,
+        IEmailOtpService emailOtpService,
         IEmailSender emailSender,
-        IOptions<FrontendOptions> frontendOptions,
         ILogger<ResendEmailConfirmationHandler> logger)
     {
         _userManager = userManager;
-        _dbContext = dbContext;
+        _emailOtpService = emailOtpService;
         _emailSender = emailSender;
-        _frontendOptions = frontendOptions.Value;
         _logger = logger;
     }
 
@@ -38,110 +39,199 @@ public sealed class ResendEmailConfirmationHandler : IRequestHandler<ResendEmail
         ResendEmailConfirmationCommand request,
         CancellationToken cancellationToken)
     {
-        var email = request.Email.Trim();
+        string userId =
+            request.UserId.Trim();
+
+        ApplicationUser? user =
+            await _userManager.FindByIdAsync(
+                userId);
 
         /*
-		 * Normalize the email using Identity's normalization to match
-		 * how Identity stores and searches for emails.
-		 */
-        var normalizedEmail = _userManager.NormalizeEmail(email);
-
-        var user = await _dbContext.ApplicationUsers
-            .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail && !u.IsDeleted, cancellationToken);
-
-       
-        if (user is null)
+         * نرجع Success في الحالات التالية:
+         *
+         * - المستخدم غير موجود.
+         * - المستخدم محذوف.
+         * - البريد مؤكد بالفعل.
+         * - المستخدم ليس لديه بريد.
+         *
+         * الهدف هو عدم كشف معلومات عن الحسابات
+         * الموجودة داخل النظام.
+         */
+        if (user is null ||
+            user.IsDeleted ||
+            user.EmailConfirmed ||
+            string.IsNullOrWhiteSpace(user.Email))
         {
             return Result.Success();
         }
 
         /*
-		 * If the email is already confirmed, return success without sending.
-		 * This is still idempotent but prevents unnecessary email sends.
-		 */
-        if (user.EmailConfirmed)
+         * إنشاء OTP جديدة.
+         *
+         * خدمة Redis تتحقق أولًا من Resend Cooldown.
+         *
+         * بعد انتهاء الـ Cooldown:
+         * - يتم حذف OTP القديمة.
+         * - إنشاء OTP جديدة.
+         * - إعادة TTL إلى 10 دقائق.
+         * - إعادة attempts إلى صفر.
+         */
+        Result<EmailOtpCreated> otpResult =
+            await _emailOtpService.CreateAsync(
+                user.Id,
+                user.Email,
+                EmailOtpPurpose.ConfirmEmail,
+                cancellationToken);
+
+        if (otpResult.IsFailure)
         {
-            return Result.Success();
+            return Result.Failure(
+                otpResult.Error);
         }
 
-        /*
-		 * If the user's stored email is null or invalid, return success.
-		 */
-        if (string.IsNullOrWhiteSpace(user.Email))
-        {
-            return Result.Success();
-        }
+        EmailOtpCreated otp =
+            otpResult.Value;
 
-        /*
-		 * Generate a new email confirmation token.
-		 */
-        var confirmationToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        int expirationMinutes =
+            Math.Max(
+                1,
+                (int)Math.Ceiling(
+                    (otp.ExpiresAtUtc - DateTime.UtcNow)
+                    .TotalMinutes));
 
-        /*
-		 * Identity tokens may contain URL-unsafe characters.
-		 * Therefore, we encode the token before putting it in the URL.
-		 */
-        var encodedToken = WebEncoders.Base64UrlEncode(
-            Encoding.UTF8.GetBytes(confirmationToken));
-
-        var confirmEmailUrl = QueryHelpers.AddQueryString(
-            _frontendOptions.ConfirmEmailUrl,
-            new Dictionary<string, string?>
-            {
-                ["userId"] = user.Id,
-                ["token"] = encodedToken
-            });
-
-        var safeConfirmEmailUrl = HtmlEncoder.Default.Encode(confirmEmailUrl);
-
-        var emailBody = $"""
-            <div style="font-family: Arial, sans-serif;">
-                <h2>Confirm your NomoAI email</h2>
-
-                <p>
-                    Thank you for signing up. Please confirm your email address to activate your account.
-                </p>
-
-                <p>
-                    Click the button below to confirm your email.
-                </p>
-
-                <p>
-                    <a href="{safeConfirmEmailUrl}"
-                       style="
-                           display: inline-block;
-                           padding: 12px 20px;
-                           background-color: #2563eb;
-                           color: white;
-                           text-decoration: none;
-                           border-radius: 6px;">
-                        Confirm Email
-                    </a>
-                </p>
-
-                <p>
-                    If you did not create an account, you can safely ignore this email.
-                </p>
-            </div>
-            """;
+        string htmlBody =
+            BuildEmailBody(
+                otp.Code,
+                expirationMinutes);
 
         try
         {
             await _emailSender.SendAsync(
                 user.Email,
-                "Confirm your NomoAI email",
-                emailBody,
+                "Your new NomoAI verification code",
+                htmlBody,
                 cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
-            
+            /*
+             * لا نسجل OTP داخل Logs.
+             *
+             * OTP ستظل موجودة داخل Redis، ويمكن
+             * للمستخدم طلب كود آخر بعد انتهاء
+             * Resend Cooldown.
+             */
             _logger.LogError(
                 exception,
-                "Failed to send email confirmation email for user {UserId}.",
+                "Failed to resend the email confirmation " +
+                "OTP for user {UserId}.",
                 user.Id);
+
+            return Result.Failure(
+                AuthErrors.EmailDeliveryFailed);
         }
 
+        _logger.LogInformation(
+            "Email confirmation OTP was resent successfully " +
+            "for user {UserId}.",
+            user.Id);
+
         return Result.Success();
+    }
+
+    private static string BuildEmailBody(
+        string otp,
+        int expirationMinutes)
+    {
+        return $"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport"
+                      content="width=device-width, initial-scale=1.0">
+            </head>
+
+            <body style="
+                margin:0;
+                padding:24px;
+                background-color:#f5f7fa;
+                font-family:Arial,sans-serif;">
+
+                <div style="
+                    max-width:600px;
+                    margin:0 auto;
+                    padding:32px;
+                    background-color:#ffffff;
+                    border:1px solid #e5e7eb;
+                    border-radius:10px;">
+
+                    <h2 style="
+                        margin-top:0;
+                        color:#111827;">
+                        Confirm your email address
+                    </h2>
+
+                    <p style="
+                        color:#374151;
+                        line-height:1.7;">
+                        You requested a new verification code.
+                        Use the following code to confirm your
+                        email address.
+                    </p>
+
+                    <div style="
+                        margin:30px 0;
+                        padding:20px;
+                        background-color:#f3f4f6;
+                        border-radius:8px;
+                        text-align:center;">
+
+                        <span style="
+                            font-size:32px;
+                            font-weight:bold;
+                            letter-spacing:10px;
+                            color:#111827;">
+                            {otp}
+                        </span>
+                    </div>
+
+                    <p style="
+                        color:#374151;
+                        line-height:1.7;">
+                        This code expires in approximately
+                        {expirationMinutes} minutes.
+                    </p>
+
+                    <p style="
+                        color:#6b7280;
+                        font-size:14px;
+                        line-height:1.6;">
+                        The previous verification code is no
+                        longer valid.
+                    </p>
+
+                    <p style="
+                        color:#6b7280;
+                        font-size:14px;
+                        line-height:1.6;">
+                        Never share this code with anyone.
+                    </p>
+
+                    <p style="
+                        color:#6b7280;
+                        font-size:14px;
+                        line-height:1.6;">
+                        If you did not request this code,
+                        you can safely ignore this email.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """;
     }
 }

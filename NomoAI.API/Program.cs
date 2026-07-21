@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +20,9 @@ using NomoAI.API.Infrastructure.Email;
 using NomoAI.API.Persistence;
 using System.Reflection;
 using System.Text;
+using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Redis;
+using StackExchange.Redis;
 
 namespace NomoAI.API
 {
@@ -149,8 +152,149 @@ namespace NomoAI.API
                 IEmailSender,
                 SmtpEmailSender>();
 
-            builder.Services.Configure<FrontendOptions>(
-                builder.Configuration.GetSection("Frontend"));
+           
+            //////////////////////
+            ///
+
+            // Upstash Redis options
+            builder.Services
+                .AddOptions<UpstashRedisOptions>()
+                .Bind(
+                    builder.Configuration.GetSection(
+                        UpstashRedisOptions.SectionName))
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(
+                            options.Endpoint),
+                    "Upstash Redis endpoint is required.")
+                .Validate(
+                    options =>
+                        options.Port > 0,
+                    "Upstash Redis port must be valid.")
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(
+                            options.Password),
+                    "Upstash Redis password is required.")
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(
+                            options.InstancePrefix),
+                    "Redis instance prefix is required.")
+                .ValidateOnStart();
+
+            // Email OTP options
+            builder.Services
+                .AddOptions<EmailOtpOptions>()
+                .Bind(
+                    builder.Configuration.GetSection(
+                        EmailOtpOptions.SectionName))
+                .Validate(
+                    options =>
+                        options.Length is >= 6 and <= 9,
+                    "OTP length must be between 6 and 9 digits.")
+                .Validate(
+                    options =>
+                        options.ExpirationMinutes > 0,
+                    "OTP expiration must be greater than zero.")
+                .Validate(
+                    options =>
+                        options.MaxAttempts > 0,
+                    "OTP maximum attempts must be greater than zero.")
+                .Validate(
+                    options =>
+                        options.ResendCooldownSeconds > 0,
+                    "OTP resend cooldown must be greater than zero.")
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(
+                            options.HashKey) &&
+                        options.HashKey.Length >= 32,
+                    "OTP HashKey must contain at least 32 characters.")
+                .ValidateOnStart();
+
+            ///////////////
+
+
+
+            //////////////تسجيل ConnectionMultiplexer
+            ///
+
+            builder.Services.AddSingleton<
+    IConnectionMultiplexer>(
+    serviceProvider =>
+    {
+        var redisOptions =
+            serviceProvider
+                .GetRequiredService<
+                    IOptions<UpstashRedisOptions>>()
+                .Value;
+
+        var logger =
+            serviceProvider
+                .GetRequiredService<
+                    ILogger<Program>>();
+
+        var configuration =
+            new ConfigurationOptions
+            {
+                User =
+                    string.IsNullOrWhiteSpace(
+                        redisOptions.User)
+                        ? null
+                        : redisOptions.User,
+
+                Password =
+                    redisOptions.Password,
+
+                Ssl =
+                    redisOptions.UseSsl,
+
+                AbortOnConnectFail = false,
+
+                ConnectRetry = 3,
+
+                ConnectTimeout = 10_000,
+
+                KeepAlive = 60
+            };
+
+        configuration.EndPoints.Add(
+            redisOptions.Endpoint,
+            redisOptions.Port);
+
+        var connection =
+            ConnectionMultiplexer.Connect(
+                configuration);
+
+        connection.ConnectionFailed +=
+            (_, eventArgs) =>
+            {
+                logger.LogError(
+                    eventArgs.Exception,
+                    "Redis connection failed. " +
+                    "Endpoint: {Endpoint}, " +
+                    "FailureType: {FailureType}.",
+                    eventArgs.EndPoint,
+                    eventArgs.FailureType);
+            };
+
+        connection.ConnectionRestored +=
+            (_, eventArgs) =>
+            {
+                logger.LogInformation(
+                    "Redis connection restored. " +
+                    "Endpoint: {Endpoint}.",
+                    eventArgs.EndPoint);
+            };
+
+        return connection;
+    });
+            /////////////////////
+            ///
+
+            builder.Services.AddScoped<IEmailOtpService,UpstashEmailOtpService>();
+
 
             // FluentValidation
             builder.Services.AddValidatorsFromAssembly(
@@ -176,6 +320,8 @@ namespace NomoAI.API
             builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);
 
             var app = builder.Build();
+
+           
 
             app.UseSwagger();
             app.UseSwaggerUI();

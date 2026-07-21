@@ -5,6 +5,6 @@ namespace NomoAI.API.Features.Auth.ChangeEmail;
 
 public sealed record ChangeEmailCommand(
     string UserId,
-    string NewEmail,
-    string CurrentPassword)
-    : IRequest<Result<ChangeEmailResponse>>;
+    string CurrentPassword,
+    string NewEmail)
+    : IRequest<Result>;

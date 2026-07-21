@@ -1,41 +1,36 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
-using System.Text;
-using System.Text.Encodings.Web;
 
 namespace NomoAI.API.Features.Auth.ConfirmEmailChange;
 
-internal sealed class ConfirmEmailChangeHandler
-    : IRequestHandler<
-        ConfirmEmailChangeCommand,
-        Result<ConfirmEmailChangeResponse>>
+public sealed class ConfirmEmailChangeHandler
+    : IRequestHandler<ConfirmEmailChangeCommand, Result>
 {
-    private readonly UserManager<ApplicationUser>
-        _userManager;
-
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IEmailOtpService _emailOtpService;
     private readonly IEmailSender _emailSender;
-
-    private readonly ILogger<ConfirmEmailChangeHandler>
-        _logger;
+    private readonly ILogger<ConfirmEmailChangeHandler> _logger;
 
     public ConfirmEmailChangeHandler(
         UserManager<ApplicationUser> userManager,
+        IEmailOtpService emailOtpService,
         IEmailSender emailSender,
         ILogger<ConfirmEmailChangeHandler> logger)
     {
         _userManager = userManager;
+        _emailOtpService = emailOtpService;
         _emailSender = emailSender;
         _logger = logger;
     }
 
-    public async Task<Result<ConfirmEmailChangeResponse>>
-        Handle(
-            ConfirmEmailChangeCommand request,
-            CancellationToken cancellationToken)
+    public async Task<Result> Handle(
+        ConfirmEmailChangeCommand request,
+        CancellationToken cancellationToken)
     {
         ApplicationUser? user =
             await _userManager.FindByIdAsync(
@@ -43,26 +38,42 @@ internal sealed class ConfirmEmailChangeHandler
 
         if (user is null || user.IsDeleted)
         {
-            return Result.Failure<
-                ConfirmEmailChangeResponse>(
-                AuthErrors.UserNotFound);
+            return Result.Failure(
+                AuthErrors.UnauthorizedAccess);
         }
 
-        string newEmail =
-            request.NewEmail.Trim();
+        Result<VerifiedEmailOtp> otpResult =
+            await _emailOtpService
+                .VerifyAndReserveAsync(
+                    user.Id,
+                    request.Otp.Trim(),
+                    EmailOtpPurpose.ChangeEmail,
+                    cancellationToken);
 
-        /*
-         * يجعل الضغط على زر التأكيد مرتين آمنًا.
-         */
+        if (otpResult.IsFailure)
+        {
+            return Result.Failure(
+                otpResult.Error);
+        }
+
+        VerifiedEmailOtp verifiedOtp =
+            otpResult.Value;
+
+        string newEmail =
+            verifiedOtp.TargetEmail.Trim();
+
         if (string.Equals(
             user.Email,
             newEmail,
-            StringComparison.OrdinalIgnoreCase))
+            StringComparison.OrdinalIgnoreCase) &&
+            user.EmailConfirmed)
         {
-            return Result.Success(
-                new ConfirmEmailChangeResponse(
-                    newEmail,
-                    "Email address has already been changed."));
+            await TryConsumeOtpAsync(
+                user.Id,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
+
+            return Result.Success();
         }
 
         ApplicationUser? existingUser =
@@ -72,155 +83,180 @@ internal sealed class ConfirmEmailChangeHandler
         if (existingUser is not null &&
             existingUser.Id != user.Id)
         {
-            return Result.Failure<
-                ConfirmEmailChangeResponse>(
+            
+            await TryConsumeOtpAsync(
+                user.Id,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
+
+            return Result.Failure(
                 AuthErrors.EmailAlreadyInUse);
-        }
-
-        string decodedToken;
-
-        try
-        {
-            decodedToken =
-                Encoding.UTF8.GetString(
-                    WebEncoders.Base64UrlDecode(
-                        request.Token));
-        }
-        catch (Exception exception)
-            when (exception is FormatException
-                or ArgumentException)
-        {
-            return Result.Failure<
-                ConfirmEmailChangeResponse>(
-                AuthErrors.InvalidEmailChangeToken);
         }
 
         string? oldEmail =
             user.Email;
 
-        IdentityResult changeEmailResult =
+        string identityToken =
+            await _userManager
+                .GenerateChangeEmailTokenAsync(
+                    user,
+                    newEmail);
+
+        IdentityResult changeResult =
             await _userManager.ChangeEmailAsync(
                 user,
                 newEmail,
-                decodedToken);
+                identityToken);
 
-        if (!changeEmailResult.Succeeded)
+        if (!changeResult.Succeeded)
         {
-            string description = string.Join(
-                " | ",
-                changeEmailResult.Errors
-                    .Select(error =>
-                        error.Description)
-                    .Where(description =>
-                        !string.IsNullOrWhiteSpace(
-                            description))
-                    .Distinct());
+            await _emailOtpService.ReleaseAsync(
+                user.Id,
+                EmailOtpPurpose.ChangeEmail,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(
-                description))
-            {
-                description =
-                    "Email address could not be changed.";
-            }
-
-            return Result.Failure<
-                ConfirmEmailChangeResponse>(
+            _logger.LogWarning(
+                "Changing email failed for user {UserId}. " +
+                "Errors: {Errors}",
+                user.Id,
+                string.Join(
+                    ", ",
+                    changeResult.Errors.Select(error =>
+                        $"{error.Code}: {error.Description}")));
+            return Result.Failure(
                 AuthErrors.EmailChangeFailed(
-                    description));
+                    "The email address could not be changed."));
         }
 
-        /*
-         * التغيير أصبح محفوظًا بالفعل.
-         * فشل رسائل الإشعار لا يجب أن يعكس التغيير.
-         */
-        if (!string.IsNullOrWhiteSpace(oldEmail))
+        
+        await TryConsumeOtpAsync(
+            user.Id,
+            verifiedOtp.ReservationToken,
+            cancellationToken);
+
+        
+        if (!string.IsNullOrWhiteSpace(oldEmail) &&
+            !string.Equals(
+                oldEmail,
+                newEmail,
+                StringComparison.OrdinalIgnoreCase))
         {
-            string safeNewEmail =
-                HtmlEncoder.Default.Encode(
-                    newEmail);
+            await TrySendOldEmailNotificationAsync(
+                oldEmail,
+                newEmail,
+                user.Id,
+                cancellationToken);
+        }
 
-            string oldEmailNotificationBody = $"""
+        _logger.LogInformation(
+            "Email was changed successfully using OTP " +
+            "for user {UserId}.",
+            user.Id);
+
+        return Result.Success();
+    }
+
+    private async Task TryConsumeOtpAsync(
+        string userId,
+        string reservationToken,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _emailOtpService.ConsumeAsync(
+                userId,
+                EmailOtpPurpose.ChangeEmail,
+                reservationToken,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            
+            _logger.LogError(
+                exception,
+                "The change-email operation completed, but " +
+                "the OTP could not be consumed for user {UserId}.",
+                userId);
+        }
+    }
+
+    private async Task TrySendOldEmailNotificationAsync(
+        string oldEmail,
+        string newEmail,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        const string subject =
+            "Your NomoAI email address was changed";
+
+        string htmlBody = $"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <body style="
+                margin:0;
+                padding:24px;
+                background-color:#f5f7fa;
+                font-family:Arial,sans-serif;">
+
                 <div style="
-                    font-family:Arial,sans-serif;
-                    line-height:1.7;
-                    color:#1f2937;">
+                    max-width:600px;
+                    margin:0 auto;
+                    padding:32px;
+                    background-color:#ffffff;
+                    border:1px solid #e5e7eb;
+                    border-radius:10px;">
 
-                    <h2>Your email address was changed</h2>
+                    <h2 style="
+                        margin-top:0;
+                        color:#111827;">
+                        Email address changed
+                    </h2>
 
-                    <p>
+                    <p style="
+                        color:#374151;
+                        line-height:1.7;">
                         The email address associated with your
-                        NomoAI account has been changed.
+                        NomoAI account has been changed to:
                     </p>
 
-                    <p>
-                        New email address:
-                        <strong>{safeNewEmail}</strong>
+                    <p style="
+                        font-weight:bold;
+                        color:#111827;">
+                        {newEmail}
                     </p>
 
-                    <p>
-                        If you did not perform this action,
-                        contact support and secure your account
-                        immediately.
+                    <p style="
+                        color:#6b7280;
+                        font-size:14px;
+                        line-height:1.6;">
+                        If you did not make this change,
+                        secure your account immediately.
                     </p>
                 </div>
-                """;
-
-            try
-            {
-                await _emailSender.SendAsync(
-                    oldEmail,
-                    "Your NomoAI email address was changed",
-                    oldEmailNotificationBody,
-                    cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Failed to send completed email change notification to the old email for user {UserId}.",
-                    user.Id);
-            }
-        }
-
-        string newEmailNotificationBody = """
-            <div style="
-                font-family:Arial,sans-serif;
-                line-height:1.7;
-                color:#1f2937;">
-
-                <h2>Email address confirmed</h2>
-
-                <p>
-                    This email address is now associated
-                    with your NomoAI account.
-                </p>
-
-                <p>
-                    You can now use it for future account
-                    communication and sign-in where supported.
-                </p>
-            </div>
+            </body>
+            </html>
             """;
 
         try
         {
             await _emailSender.SendAsync(
-                newEmail,
-                "Your new email address is confirmed",
-                newEmailNotificationBody,
+                oldEmail,
+                subject,
+                htmlBody,
                 cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(
+            _logger.LogError(
                 exception,
-                "Failed to send completed email change notification to the new email for user {UserId}.",
-                user.Id);
+                "Email-change notification could not be sent " +
+                "to the old email for user {UserId}.",
+                userId);
         }
-
-        return Result.Success(
-            new ConfirmEmailChangeResponse(
-                newEmail,
-                "Email address changed successfully."));
     }
 }

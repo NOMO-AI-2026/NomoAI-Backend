@@ -1,109 +1,158 @@
-﻿using System.Text;
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
 
 namespace NomoAI.API.Features.Auth.ResetPassword;
 
-public sealed class ResetPasswordCommandHandler: IRequestHandler<ResetPasswordCommand, Result>
+public sealed class ResetPasswordHandler
+    : IRequestHandler<ResetPasswordCommand, Result>
 {
-	private readonly UserManager<ApplicationUser> _userManager;
-	private readonly ILogger<ResetPasswordCommandHandler> _logger;
-	public ResetPasswordCommandHandler(UserManager<ApplicationUser> userManager,ILogger<ResetPasswordCommandHandler> logger)
-	{
-		_userManager = userManager;
-		_logger = logger;
-	}
+    private readonly UserManager<ApplicationUser>
+        _userManager;
 
-	public async Task<Result> Handle(ResetPasswordCommand request,CancellationToken cancellationToken)
-	{
-		var user = await _userManager.FindByIdAsync(request.UserId);
+    private readonly IEmailOtpService
+        _emailOtpService;
 
-		/*
-         * We return InvalidToken instead of UserNotFound.
-         *
-         * From the client's perspective, a missing user and an invalid
-         * reset token both mean that the reset link cannot be used.
-         */
-		if (user is null)
-		{
-			return Result.Failure(AuthErrors.InvalidToken);
-		}
+    private readonly ILogger<ResetPasswordHandler>
+        _logger;
 
-		string decodedToken;
+    public ResetPasswordHandler(
+        UserManager<ApplicationUser> userManager,
+        IEmailOtpService emailOtpService,
+        ILogger<ResetPasswordHandler> logger)
+    {
+        _userManager = userManager;
+        _emailOtpService = emailOtpService;
+        _logger = logger;
+    }
 
-		try
-		{
-			var tokenBytes =WebEncoders.Base64UrlDecode(request.Token);
+    public async Task<Result> Handle(
+        ResetPasswordCommand request,
+        CancellationToken cancellationToken)
+    {
+        string email =
+            request.Email.Trim();
 
-			decodedToken =Encoding.UTF8.GetString(tokenBytes);
-		}
-		catch (FormatException exception)
-		{
-			_logger.LogWarning(
-				exception,
-				"Password reset token has an invalid format for user {UserId}.",
-				request.UserId);
+        ApplicationUser? user =
+            await _userManager.FindByEmailAsync(
+                email);
 
-			return Result.Failure(AuthErrors.InvalidToken);
-		}
-		catch (ArgumentException exception)
-		{
-			_logger.LogWarning(
-				exception,
-				"Password reset token could not be decoded for user {UserId}.",
-				request.UserId);
+        
+        if (user is null ||
+            user.IsDeleted ||
+            string.IsNullOrWhiteSpace(user.Email))
+        {
+            return Result.Failure(
+                EmailOtpErrors.InvalidOrExpired);
+        }
 
-			return Result.Failure(AuthErrors.InvalidToken);
-		}
+        Result<VerifiedEmailOtp> otpResult =
+            await _emailOtpService
+                .VerifyAndReserveAsync(
+                    user.Id,
+                    request.Otp.Trim(),
+                    EmailOtpPurpose.ResetPassword,
+                    cancellationToken);
 
-		var resetPasswordResult =await _userManager.ResetPasswordAsync(user,decodedToken,request.NewPassword);
+        if (otpResult.IsFailure)
+        {
+            return Result.Failure(
+                otpResult.Error);
+        }
 
-		if (resetPasswordResult.Succeeded)
-		{
-			_logger.LogInformation("Password was reset successfully for user {UserId}.",user.Id);
+        VerifiedEmailOtp verifiedOtp =
+            otpResult.Value;
 
-			return Result.Success();
-		}
+        
+        if (!string.Equals(
+            verifiedOtp.TargetEmail,
+            user.Email,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            await _emailOtpService.ReleaseAsync(
+                user.Id,
+                EmailOtpPurpose.ResetPassword,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
 
-		var identityErrors =resetPasswordResult.Errors.ToArray();
+            _logger.LogWarning(
+                "Password reset OTP target email does not " +
+                "match the current email for user {UserId}.",
+                user.Id);
 
-		_logger.LogWarning(
-			"Password reset failed for user {UserId}. Errors: {Errors}",
-			user.Id,
-			string.Join(
-				", ",
-				identityErrors.Select(error =>
-					$"{error.Code}: {error.Description}")));
+            return Result.Failure(
+                EmailOtpErrors.InvalidOrExpired);
+        }
 
-		var containsInvalidTokenError =
-			identityErrors.Any(error =>
-				string.Equals(
-					error.Code,
-					"InvalidToken",
-					StringComparison.OrdinalIgnoreCase));
+        
+        string identityToken =
+            await _userManager
+                .GeneratePasswordResetTokenAsync(
+                    user);
 
-		if (containsInvalidTokenError)
-		{
-			return Result.Failure(AuthErrors.InvalidToken);
-		}
+        IdentityResult resetResult =
+            await _userManager.ResetPasswordAsync(
+                user,
+                identityToken,
+                request.NewPassword);
 
-		/*
-         * These are normally password-policy errors, such as:
-         *
-         * - PasswordTooShort
-         * - PasswordRequiresDigit
-         * - PasswordRequiresUpper
-         * - PasswordRequiresLower
-         * - PasswordRequiresNonAlphanumeric
-         */
-		var errorDescription = string.Join(
-			" | ",
-			identityErrors.Select(error => error.Description));
+        if (!resetResult.Succeeded)
+        {
+           
+            await _emailOtpService.ReleaseAsync(
+                user.Id,
+                EmailOtpPurpose.ResetPassword,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
 
-		return Result.Failure(
-			AuthErrors.PasswordResetFailed(errorDescription));
-	}
+            string errors =
+                string.Join(
+                    " ",
+                    resetResult.Errors.Select(
+                        error => error.Description));
+
+            _logger.LogWarning(
+                "Password reset failed for user {UserId}. " +
+                "Errors: {Errors}",
+                user.Id,
+                string.Join(
+                    ", ",
+                    resetResult.Errors.Select(error =>
+                        $"{error.Code}: {error.Description}")));
+
+            return Result.Failure(
+                AuthErrors.PasswordResetFailed(
+                    errors));
+        }
+
+       
+        try
+        {
+            await _emailOtpService.ConsumeAsync(
+                user.Id,
+                EmailOtpPurpose.ResetPassword,
+                verifiedOtp.ReservationToken,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            
+            _logger.LogError(
+                exception,
+                "Password was reset, but its OTP could not " +
+                "be consumed for user {UserId}.",
+                user.Id);
+        }
+
+        _logger.LogInformation(
+            "Password was reset successfully using OTP " +
+            "for user {UserId}.",
+            user.Id);
+
+        return Result.Success();
+    }
 }

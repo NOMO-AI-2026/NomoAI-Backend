@@ -1,17 +1,33 @@
 ﻿using FluentValidation;
+using Microsoft.Extensions.Options;
+using NomoAI.API.Common.EmailOtp;
 
 namespace NomoAI.API.Features.Auth.ConfirmEmail;
 
-public sealed class ConfirmEmailValidator : AbstractValidator<ConfirmEmailCommand>
+public sealed class ConfirmEmailValidator
+    : AbstractValidator<ConfirmEmailCommand>
 {
-    public ConfirmEmailValidator()
+    public ConfirmEmailValidator(
+        IOptions<EmailOtpOptions> otpOptions)
     {
-        RuleFor(x => x.UserId)
-            .NotEmpty()
-            .WithMessage("User ID is required.");
+        int otpLength =
+            otpOptions.Value.Length;
 
-        RuleFor(x => x.Token)
+        RuleFor(command => command.UserId)
             .NotEmpty()
-            .WithMessage("Token is required.");
+            .WithMessage(
+                "User ID is required.");
+
+        RuleFor(command => command.Otp)
+            .Cascade(CascadeMode.StopOnFirstFailure)
+            .NotEmpty()
+            .WithMessage(
+                "Verification code is required.")
+            .Must(otp =>
+                otp.Length == otpLength &&
+                otp.All(char.IsDigit))
+            .WithMessage(
+                $"Verification code must contain exactly " +
+                $"{otpLength} digits.");
     }
 }

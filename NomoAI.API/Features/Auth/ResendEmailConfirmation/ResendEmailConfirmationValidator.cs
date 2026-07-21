@@ -2,16 +2,17 @@
 
 namespace NomoAI.API.Features.Auth.ResendEmailConfirmation;
 
-public sealed class ResendEmailConfirmationValidator : AbstractValidator<ResendEmailConfirmationCommand>
+public sealed class ResendEmailConfirmationValidator
+    : AbstractValidator<ResendEmailConfirmationCommand>
 {
     public ResendEmailConfirmationValidator()
     {
-        RuleFor(x => x.Email)
+        RuleFor(command => command.UserId)
+            .Cascade(CascadeMode.StopOnFirstFailure)
             .NotEmpty()
-            .WithMessage("Email is required.")
-            .EmailAddress()
-            .WithMessage("Email address is invalid.")
-            .MaximumLength(256)
-            .WithMessage("Email address must not exceed 256 characters.");
+            .WithMessage("User ID is required.")
+            .Must(userId =>
+                Guid.TryParse(userId, out _))
+            .WithMessage("User ID is invalid.");
     }
 }

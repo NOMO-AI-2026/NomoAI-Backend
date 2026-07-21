@@ -23,7 +23,8 @@ namespace NomoAI.API.Features.Auth.Register_User
                         Password = request.Password,
                         Gender = request.Gender,
                         Age = request.Age,
-                        Role = request.Role
+                        Role = request.Role,
+                        PhoneNumber = request.PhoneNumber
                     };
 
                     var result = await mediator.Send(command, cancellationToken);

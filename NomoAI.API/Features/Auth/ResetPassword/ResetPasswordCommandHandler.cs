@@ -11,14 +11,9 @@ namespace NomoAI.API.Features.Auth.ResetPassword;
 public sealed class ResetPasswordHandler
     : IRequestHandler<ResetPasswordCommand, Result>
 {
-    private readonly UserManager<ApplicationUser>
-        _userManager;
-
-    private readonly IEmailOtpService
-        _emailOtpService;
-
-    private readonly ILogger<ResetPasswordHandler>
-        _logger;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IEmailOtpService _emailOtpService;
+    private readonly ILogger<ResetPasswordHandler> _logger;
 
     public ResetPasswordHandler(
         UserManager<ApplicationUser> userManager,
@@ -38,36 +33,30 @@ public sealed class ResetPasswordHandler
             request.Email.Trim();
 
         ApplicationUser? user =
-            await _userManager.FindByEmailAsync(
-                email);
+            await _userManager.FindByEmailAsync(email);
 
-        
         if (user is null ||
             user.IsDeleted ||
             string.IsNullOrWhiteSpace(user.Email))
         {
-            return Result.Failure(
-                EmailOtpErrors.InvalidOrExpired);
+            return Result.Failure(EmailOtpErrors.InvalidOrExpired);
         }
 
         Result<VerifiedEmailOtp> otpResult =
-            await _emailOtpService
-                .VerifyAndReserveAsync(
-                    user.Id,
-                    request.Otp.Trim(),
-                    EmailOtpPurpose.ResetPassword,
-                    cancellationToken);
+            await _emailOtpService.VerifyAndReserveAsync(
+                user.Id,
+                request.Otp.Trim(),
+                EmailOtpPurpose.ResetPassword,
+                cancellationToken);
 
         if (otpResult.IsFailure)
         {
-            return Result.Failure(
-                otpResult.Error);
+            return Result.Failure(otpResult.Error);
         }
 
         VerifiedEmailOtp verifiedOtp =
             otpResult.Value;
 
-        
         if (!string.Equals(
             verifiedOtp.TargetEmail,
             user.Email,
@@ -84,15 +73,12 @@ public sealed class ResetPasswordHandler
                 "match the current email for user {UserId}.",
                 user.Id);
 
-            return Result.Failure(
-                EmailOtpErrors.InvalidOrExpired);
+            return Result.Failure(EmailOtpErrors.InvalidOrExpired);
         }
 
-        
         string identityToken =
-            await _userManager
-                .GeneratePasswordResetTokenAsync(
-                    user);
+            await _userManager.GeneratePasswordResetTokenAsync(
+                user);
 
         IdentityResult resetResult =
             await _userManager.ResetPasswordAsync(
@@ -102,7 +88,6 @@ public sealed class ResetPasswordHandler
 
         if (!resetResult.Succeeded)
         {
-           
             await _emailOtpService.ReleaseAsync(
                 user.Id,
                 EmailOtpPurpose.ResetPassword,
@@ -116,8 +101,7 @@ public sealed class ResetPasswordHandler
                         error => error.Description));
 
             _logger.LogWarning(
-                "Password reset failed for user {UserId}. " +
-                "Errors: {Errors}",
+                "Password reset failed for user {UserId}. Errors: {Errors}",
                 user.Id,
                 string.Join(
                     ", ",
@@ -125,34 +109,41 @@ public sealed class ResetPasswordHandler
                         $"{error.Code}: {error.Description}")));
 
             return Result.Failure(
-                AuthErrors.PasswordResetFailed(
-                    errors));
+                AuthErrors.PasswordResetFailed(errors));
         }
 
-       
+        await TryConsumeOtpAsync(
+            user.Id,
+            verifiedOtp.ReservationToken,
+            cancellationToken);
+
+        _logger.LogInformation(
+            "Password was reset successfully using OTP for user {UserId}.",
+            user.Id);
+
+        return Result.Success();
+    }
+
+    private async Task TryConsumeOtpAsync(
+        string userId,
+        string reservationToken,
+        CancellationToken cancellationToken)
+    {
         try
         {
             await _emailOtpService.ConsumeAsync(
-                user.Id,
+                userId,
                 EmailOtpPurpose.ResetPassword,
-                verifiedOtp.ReservationToken,
+                reservationToken,
                 cancellationToken);
         }
         catch (Exception exception)
         {
-            
             _logger.LogError(
                 exception,
                 "Password was reset, but its OTP could not " +
                 "be consumed for user {UserId}.",
-                user.Id);
+                userId);
         }
-
-        _logger.LogInformation(
-            "Password was reset successfully using OTP " +
-            "for user {UserId}.",
-            user.Id);
-
-        return Result.Success();
     }
 }

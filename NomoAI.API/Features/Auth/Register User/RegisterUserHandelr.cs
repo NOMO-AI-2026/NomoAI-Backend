@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Identity;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;

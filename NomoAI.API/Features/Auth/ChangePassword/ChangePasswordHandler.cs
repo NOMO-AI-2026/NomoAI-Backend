@@ -6,12 +6,9 @@ using NomoAI.API.Domain.Entities;
 namespace NomoAI.API.Features.Auth.ChangePassword;
 
 internal sealed class ChangePasswordHandler
-    : IRequestHandler<
-        ChangePasswordCommand,
-        Result<ChangePasswordResponse>>
+    : IRequestHandler<ChangePasswordCommand, Result<ChangePasswordResponse>>
 {
-    private readonly UserManager<ApplicationUser>
-        _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
 
     public ChangePasswordHandler(
         UserManager<ApplicationUser> userManager)
@@ -24,8 +21,7 @@ internal sealed class ChangePasswordHandler
         CancellationToken cancellationToken)
     {
         ApplicationUser? user =
-            await _userManager.FindByIdAsync(
-                request.UserId);
+            await _userManager.FindByIdAsync(request.UserId);
 
         if (user is null || user.IsDeleted)
         {
@@ -41,30 +37,33 @@ internal sealed class ChangePasswordHandler
 
         if (!changePasswordResult.Succeeded)
         {
-            string description = string.Join(
-                " | ",
-                changePasswordResult.Errors
-                    .Select(error => error.Description)
-                    .Where(description =>
-                        !string.IsNullOrWhiteSpace(
-                            description))
-                    .Distinct());
-
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                description =
-                    "Password could not be changed.";
-            }
+            string description =
+                BuildFailureDescription(changePasswordResult);
 
             return Result.Failure<ChangePasswordResponse>(
-                AuthErrors.ChangePasswordFailed(
-                    description));
+                AuthErrors.ChangePasswordFailed(description));
         }
 
-        var response =
+        return Result.Success(
             new ChangePasswordResponse(
-                "Password changed successfully.");
+                "Password changed successfully."));
+    }
 
-        return Result.Success(response);
+    private static string BuildFailureDescription(
+        IdentityResult changePasswordResult)
+    {
+        string description = string.Join(
+            " | ",
+            changePasswordResult.Errors
+                .Select(error => error.Description)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .Distinct());
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return "Password could not be changed.";
+        }
+
+        return description;
     }
 }

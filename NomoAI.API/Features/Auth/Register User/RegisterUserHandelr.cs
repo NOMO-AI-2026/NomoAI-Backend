@@ -2,24 +2,36 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
-using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Register_User;
 
-public sealed class RegisterUserHandler(
-    UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole> roleManager,
-    AppDbContext dbContext,
-    IEmailSender emailSender,
-    IEmailOtpService emailOtpService,
-    ILogger<RegisterUserHandler> logger)
-    : IRequestHandler<
-        RegisterUserCommand,
-        Result<RegisterResponseDto>>
+public sealed class RegisterUserHandler
+    : IRequestHandler<RegisterUserCommand, Result<RegisterResponseDto>>
 {
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly AppDbContext _dbContext;
+    private readonly IEmailOtpDispatcher _emailOtpDispatcher;
+    private readonly ILogger<RegisterUserHandler> _logger;
+
+    public RegisterUserHandler(
+        UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        AppDbContext dbContext,
+        IEmailOtpDispatcher emailOtpDispatcher,
+        ILogger<RegisterUserHandler> logger)
+    {
+        _userManager = userManager;
+        _roleManager = roleManager;
+        _dbContext = dbContext;
+        _emailOtpDispatcher = emailOtpDispatcher;
+        _logger = logger;
+    }
+
     public async Task<Result<RegisterResponseDto>> Handle(
         RegisterUserCommand request,
         CancellationToken cancellationToken)
@@ -28,7 +40,7 @@ public sealed class RegisterUserHandler(
             request.Email.Trim();
 
         ApplicationUser? existingUser =
-            await userManager.FindByEmailAsync(email);
+            await _userManager.FindByEmailAsync(email);
 
         if (existingUser is not null)
         {
@@ -36,18 +48,11 @@ public sealed class RegisterUserHandler(
                 AuthErrors.UserAlreadyExists);
         }
 
-        var user = new ApplicationUser
-        {
-            UserName = email,
-            Email = email,
-            Fullname = request.FullName,
-            Age = request.Age,
-            Gender = request.Gender,
-            PhoneNumber = request.PhoneNumber
-        };
+        ApplicationUser user =
+            CreateUser(request, email);
 
         IdentityResult createResult =
-            await userManager.CreateAsync(
+            await _userManager.CreateAsync(
                 user,
                 request.Password);
 
@@ -58,63 +63,23 @@ public sealed class RegisterUserHandler(
         }
 
         string roleName =
-            request.Role == UserRole.Doctor
-                ? "Doctor"
-                : "Parent";
+            GetRoleName(request.Role);
 
-        bool roleExists =
-            await roleManager.RoleExistsAsync(
-                roleName);
+        IdentityResult ensureRoleResult =
+            await EnsureUserRoleAsync(user, roleName);
 
-        if (!roleExists)
-        {
-            IdentityResult createRoleResult =
-                await roleManager.CreateAsync(
-                    new IdentityRole(roleName));
-
-            if (!createRoleResult.Succeeded)
-            {
-                return Result.Failure<RegisterResponseDto>(
-                    AuthErrors.UserRegistrationFailed);
-            }
-        }
-
-        IdentityResult addToRoleResult =
-            await userManager.AddToRoleAsync(
-                user,
-                roleName);
-
-        if (!addToRoleResult.Succeeded)
+        if (!ensureRoleResult.Succeeded)
         {
             return Result.Failure<RegisterResponseDto>(
                 AuthErrors.UserRegistrationFailed);
         }
 
-        if (request.Role == UserRole.Doctor)
-        {
-            dbContext.Add(
-                new Doctor
-                {
-                    UserId = user.Id
-                });
-        }
-        else
-        {
-            dbContext.Add(
-                new Parent
-                {
-                    UserId = user.Id
-                });
-        }
+        AddProfile(user.Id, request.Role);
 
-        await dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         await TrySendConfirmationOtpAsync(
             user,
-            emailOtpService,
-            emailSender,
-            logger,
             cancellationToken);
 
         return Result.Success(
@@ -122,157 +87,104 @@ public sealed class RegisterUserHandler(
             {
                 UserId = user.Id,
                 FullName = user.Fullname,
-                Username = user.Email ?? email
+                Username = user.Email
             });
     }
 
-    private static async Task TrySendConfirmationOtpAsync(
+    private static ApplicationUser CreateUser(
+        RegisterUserCommand request,
+        string email)
+    {
+        return new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            Fullname = request.FullName,
+            Age = request.Age,
+            Gender = request.Gender,
+            PhoneNumber = request.PhoneNumber
+        };
+    }
+
+    private static string GetRoleName(UserRole role)
+    {
+        return role == UserRole.Doctor
+            ? "Doctor"
+            : "Parent";
+    }
+
+    private async Task<IdentityResult> EnsureUserRoleAsync(
         ApplicationUser user,
-        IEmailOtpService emailOtpService,
-        IEmailSender emailSender,
-        ILogger<RegisterUserHandler> logger,
+        string roleName)
+    {
+        bool roleExists =
+            await _roleManager.RoleExistsAsync(roleName);
+
+        if (!roleExists)
+        {
+            IdentityResult createRoleResult =
+                await _roleManager.CreateAsync(
+                    new IdentityRole(roleName));
+
+            if (!createRoleResult.Succeeded)
+            {
+                return createRoleResult;
+            }
+        }
+
+        return await _userManager.AddToRoleAsync(
+            user,
+            roleName);
+    }
+
+    private void AddProfile(
+        string userId,
+        UserRole role)
+    {
+        if (role == UserRole.Doctor)
+        {
+            _dbContext.Add(
+                new Doctor
+                {
+                    UserId = userId
+                });
+        }
+        else
+        {
+            _dbContext.Add(
+                new Parent
+                {
+                    UserId = userId
+                });
+        }
+    }
+
+    private async Task TrySendConfirmationOtpAsync(
+        ApplicationUser user,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(user.Email))
         {
-            logger.LogWarning(
+            _logger.LogWarning(
                 "Confirmation OTP was not created because user {UserId} has no email address.",
                 user.Id);
 
             return;
         }
 
-        Result<EmailOtpCreated> otpResult =
-            await emailOtpService.CreateAsync(
+        Result<EmailOtpDispatchResult> dispatchResult =
+            await _emailOtpDispatcher.SendAsync(
                 user.Id,
                 user.Email,
                 EmailOtpPurpose.ConfirmEmail,
                 cancellationToken);
 
-        if (otpResult.IsFailure)
+        if (dispatchResult.IsFailure)
         {
-            logger.LogError(
-                "Failed to create confirmation OTP for user {UserId}. ErrorCode: {ErrorCode}.",
+            _logger.LogError(
+                "Failed to send confirmation OTP for user {UserId}. ErrorCode: {ErrorCode}.",
                 user.Id,
-                otpResult.Error.Code);
-
-            return;
-        }
-
-        EmailOtpCreated otp =
-            otpResult.Value;
-
-        int expirationMinutes =
-            Math.Max(
-                1,
-                (int)Math.Ceiling(
-                    (otp.ExpiresAtUtc - DateTime.UtcNow)
-                    .TotalMinutes));
-
-        const string subject =
-            "Your NomoAI verification code";
-
-        string htmlBody = $"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta
-                    name="viewport"
-                    content="width=device-width, initial-scale=1.0">
-            </head>
-
-            <body style="
-                margin:0;
-                padding:24px;
-                background-color:#f5f7fa;
-                font-family:Arial,sans-serif;">
-
-                <div style="
-                    max-width:600px;
-                    margin:0 auto;
-                    padding:32px;
-                    background-color:#ffffff;
-                    border:1px solid #e5e7eb;
-                    border-radius:10px;">
-
-                    <h2 style="
-                        margin-top:0;
-                        color:#111827;">
-                        Welcome to NomoAI
-                    </h2>
-
-                    <p style="
-                        color:#374151;
-                        line-height:1.7;">
-                        Use the following verification code
-                        to confirm your email address.
-                    </p>
-
-                    <div style="
-                        margin:30px 0;
-                        padding:20px;
-                        background-color:#f3f4f6;
-                        border-radius:8px;
-                        text-align:center;">
-
-                        <span style="
-                            font-size:32px;
-                            font-weight:bold;
-                            letter-spacing:10px;
-                            color:#111827;">
-                            {otp.Code}
-                        </span>
-                    </div>
-
-                    <p style="
-                        color:#374151;
-                        line-height:1.7;">
-                        This code expires in approximately
-                        {expirationMinutes} minutes.
-                    </p>
-
-                    <p style="
-                        color:#6b7280;
-                        font-size:14px;
-                        line-height:1.6;">
-                        Never share this code with anyone.
-                    </p>
-
-                    <p style="
-                        color:#6b7280;
-                        font-size:14px;
-                        line-height:1.6;">
-                        If you did not create this account,
-                        you can safely ignore this email.
-                    </p>
-                </div>
-            </body>
-            </html>
-            """;
-
-        try
-        {
-            await emailSender.SendAsync(
-                user.Email,
-                subject,
-                htmlBody,
-                cancellationToken);
-
-            logger.LogInformation(
-                "Confirmation OTP email was sent successfully for user {UserId}.",
-                user.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(
-                exception,
-                "Failed to send confirmation OTP email for user {UserId}.",
-                user.Id);
+                dispatchResult.Error.Code);
         }
     }
 }

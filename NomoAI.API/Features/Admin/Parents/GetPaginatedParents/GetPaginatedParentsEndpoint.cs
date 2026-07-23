@@ -13,6 +13,7 @@ public static class GetPaginatedParentsEndpoint
             .RequireAuthorization(
                 policy => policy.RequireRole("Admin"))
             .WithName("GetPaginatedParents")
+            .WithTags("AdminDashboard")
             .WithSummary(
                 "Get paginated parent list")
             .WithDescription(

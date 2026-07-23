@@ -61,17 +61,14 @@ public sealed class RegisterUserHandler
             existingUser.Gender = request.Gender;
             existingUser.PhoneNumber = request.PhoneNumber;
 
-            await userManager.RemovePasswordAsync(existingUser);
-            await userManager.AddPasswordAsync(existingUser, request.Password);
+            await _userManager.RemovePasswordAsync(existingUser);
+            await _userManager.AddPasswordAsync(existingUser, request.Password);
             await _roleManger.AddToRole(existingUser, request.Role);
             existingUser.EmailConfirmed = false;
-            await userManager.UpdateAsync(existingUser);
+            await _userManager.UpdateAsync(existingUser);
 
             await TrySendConfirmationOtpAsync(
                existingUser,
-               emailOtpService,
-               emailSender,
-               logger,
                cancellationToken);
 
             return Result.Success(
@@ -97,29 +94,27 @@ public sealed class RegisterUserHandler
             };
 
             IdentityResult createResult =
-                await userManager.CreateAsync(
+                await _userManager.CreateAsync(
                     user,
                     request.Password);
 
             if (!createResult.Succeeded)
             {
-                return createRoleResult;
+                return Result.Failure<RegisterResponseDto>(
+                    AuthErrors.UserRegistrationFailed);
             }
 
 
-           await _roleManger.AddToRole(
+            await _roleManger.AddToRole(
                 user,
                 request.Role);
 
-            await dbContext.SaveChangesAsync(
+            await _dbContext.SaveChangesAsync(
                 cancellationToken);
 
 
             await TrySendConfirmationOtpAsync(
                 user,
-                emailOtpService,
-                emailSender,
-                logger,
                 cancellationToken);
 
             return Result.Success(

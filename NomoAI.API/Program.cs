@@ -24,6 +24,10 @@ using NomoAI.API.Persistence;
 using StackExchange.Redis;
 using System.Reflection;
 using System.Text;
+using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.Redis;
+using StackExchange.Redis;
+using NomoAI.API.Common.Roles;
 
 namespace NomoAI.API
 {
@@ -327,6 +331,9 @@ namespace NomoAI.API
 
             //Auto Mapper
             builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);
+
+            //Role Manger 
+            builder.Services.AddScoped<IRoleManger , RoleManger>();
 
             var app = builder.Build();
 

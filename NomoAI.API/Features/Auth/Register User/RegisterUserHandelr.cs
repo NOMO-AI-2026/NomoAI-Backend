@@ -4,10 +4,12 @@ using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Enums;
+using NomoAI.API.Common.Roles;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Register_User;
+
 
 public sealed class RegisterUserHandler
     : IRequestHandler<RegisterUserCommand, Result<RegisterResponseDto>>
@@ -16,6 +18,7 @@ public sealed class RegisterUserHandler
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly AppDbContext _dbContext;
     private readonly IEmailOtpDispatcher _emailOtpDispatcher;
+    private readonly IRoleManger _roleManger;
     private readonly ILogger<RegisterUserHandler> _logger;
 
     public RegisterUserHandler(
@@ -23,14 +26,17 @@ public sealed class RegisterUserHandler
         RoleManager<IdentityRole> roleManager,
         AppDbContext dbContext,
         IEmailOtpDispatcher emailOtpDispatcher,
+        IRoleManger roleManger,
         ILogger<RegisterUserHandler> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _dbContext = dbContext;
         _emailOtpDispatcher = emailOtpDispatcher;
+        _roleManger = roleManger;
         _logger = logger;
     }
+
 
     public async Task<Result<RegisterResponseDto>> Handle(
         RegisterUserCommand request,
@@ -42,119 +48,86 @@ public sealed class RegisterUserHandler
         ApplicationUser? existingUser =
             await _userManager.FindByEmailAsync(email);
 
-        if (existingUser is not null)
+        if (existingUser != null)
         {
-            return Result.Failure<RegisterResponseDto>(
-                AuthErrors.UserAlreadyExists);
-        }
-
-        ApplicationUser user =
-            CreateUser(request, email);
-
-        IdentityResult createResult =
-            await _userManager.CreateAsync(
-                user,
-                request.Password);
-
-        if (!createResult.Succeeded)
-        {
-            return Result.Failure<RegisterResponseDto>(
-                AuthErrors.UserRegistrationFailed);
-        }
-
-        string roleName =
-            GetRoleName(request.Role);
-
-        IdentityResult ensureRoleResult =
-            await EnsureUserRoleAsync(user, roleName);
-
-        if (!ensureRoleResult.Succeeded)
-        {
-            return Result.Failure<RegisterResponseDto>(
-                AuthErrors.UserRegistrationFailed);
-        }
-
-        AddProfile(user.Id, request.Role);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await TrySendConfirmationOtpAsync(
-            user,
-            cancellationToken);
-
-        return Result.Success(
-            new RegisterResponseDto
+            if (!existingUser.IsDeleted)
             {
-                UserId = user.Id,
-                FullName = user.Fullname,
-                Username = user.Email
-            });
-    }
-
-    private static ApplicationUser CreateUser(
-        RegisterUserCommand request,
-        string email)
-    {
-        return new ApplicationUser
-        {
-            UserName = email,
-            Email = email,
-            Fullname = request.FullName,
-            Age = request.Age,
-            Gender = request.Gender,
-            PhoneNumber = request.PhoneNumber
-        };
-    }
-
-    private static string GetRoleName(UserRole role)
-    {
-        return role == UserRole.Doctor
-            ? "Doctor"
-            : "Parent";
-    }
-
-    private async Task<IdentityResult> EnsureUserRoleAsync(
-        ApplicationUser user,
-        string roleName)
-    {
-        bool roleExists =
-            await _roleManager.RoleExistsAsync(roleName);
-
-        if (!roleExists)
-        {
-            IdentityResult createRoleResult =
-                await _roleManager.CreateAsync(
-                    new IdentityRole(roleName));
-
-            if (!createRoleResult.Succeeded)
-            {
-                return createRoleResult;
+                return Result.Failure<RegisterResponseDto>(AuthErrors.UserAlreadyExists);
             }
-        }
 
-        return await _userManager.AddToRoleAsync(
-            user,
-            roleName);
-    }
+            existingUser.IsDeleted = false;
+            existingUser.Fullname = request.FullName;
+            existingUser.Age = request.Age;
+            existingUser.Gender = request.Gender;
+            existingUser.PhoneNumber = request.PhoneNumber;
 
-    private void AddProfile(
-        string userId,
-        UserRole role)
-    {
-        if (role == UserRole.Doctor)
-        {
-            _dbContext.Add(
-                new Doctor
+            await userManager.RemovePasswordAsync(existingUser);
+            await userManager.AddPasswordAsync(existingUser, request.Password);
+            await _roleManger.AddToRole(existingUser, request.Role);
+            existingUser.EmailConfirmed = false;
+            await userManager.UpdateAsync(existingUser);
+
+            await TrySendConfirmationOtpAsync(
+               existingUser,
+               emailOtpService,
+               emailSender,
+               logger,
+               cancellationToken);
+
+            return Result.Success(
+                new RegisterResponseDto
                 {
-                    UserId = userId
+                    UserId = existingUser.Id,
+                    FullName = existingUser.Fullname,
+                    Username = existingUser.Email ?? email
                 });
+
         }
         else
         {
-            _dbContext.Add(
-                new Parent
+
+            var user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                Fullname = request.FullName,
+                Age = request.Age,
+                Gender = request.Gender,
+                PhoneNumber = request.PhoneNumber
+            };
+
+            IdentityResult createResult =
+                await userManager.CreateAsync(
+                    user,
+                    request.Password);
+
+            if (!createResult.Succeeded)
+            {
+                return createRoleResult;
+            }
+
+
+           await _roleManger.AddToRole(
+                user,
+                request.Role);
+
+            await dbContext.SaveChangesAsync(
+                cancellationToken);
+
+
+            await TrySendConfirmationOtpAsync(
+                user,
+                emailOtpService,
+                emailSender,
+                logger,
+                cancellationToken);
+
+            return Result.Success(
+                new RegisterResponseDto
                 {
-                    UserId = userId
+                    UserId = user.Id,
+                    FullName = user.Fullname,
+                    Username = user.Email ?? email
                 });
         }
     }

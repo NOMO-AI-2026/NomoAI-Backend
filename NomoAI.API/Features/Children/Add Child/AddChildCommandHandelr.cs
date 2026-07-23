@@ -26,7 +26,10 @@ namespace NomoAI.API.Features.Children.Add_Child
             {
                 return Result.Failure<AddChildResponseDto>(ChildrenErrors.DoctorNotFound);
             }
-            int doctorId = _db.Doctor.FirstOrDefault(x => x.UserId == request.UserId)?.Id ?? 0;
+            int doctorId = _db.Doctor.FirstOrDefault(x => x.UserId == request.UserId &&!x.IsDeleted)?.Id ?? 0;
+            if (doctorId == 0) { 
+                return Result.Failure<AddChildResponseDto>(ChildrenErrors.DoctorNotFound);
+            }
             var child = new Domain.Entities.Children
             {
                 FullName = request.FullName,

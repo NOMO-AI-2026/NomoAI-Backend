@@ -8,7 +8,9 @@ public static class SearchParentsEndpoint
     public static void MapEndpoint(RouteGroupBuilder group)
     {
         group
-            .MapGet("api/parents/search", HandleAsync)
+            .MapGet("/search", HandleAsync)
+            //.RequireAuthorization(policy =>
+            //    policy.RequireRole("Admin"))
             .AllowAnonymous()
             .WithName("SearchParents")
             .WithSummary("Search for parents")
@@ -27,20 +29,19 @@ public static class SearchParentsEndpoint
         ISender sender,
         CancellationToken cancellationToken)
     {
-        int pageNumber = request.PageNumber ?? 1;
-        int pageSize = request.PageSize ?? 10;
-
         var query = new SearchParentsQuery(
             request.SearchTerm,
-            pageNumber,
-            pageSize);
+            request.PageNumber ?? 1,
+            request.PageSize ?? 10);
 
         Result<SearchParentsResponse> result =
             await sender.Send(query, cancellationToken);
 
         if (result.IsFailure)
         {
-            return Results.BadRequest(result.Error);
+            return Results.Json(
+                result.Error,
+                statusCode: result.Error.StatusCode);
         }
 
         return Results.Ok(result.Value);

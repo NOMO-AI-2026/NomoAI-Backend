@@ -9,15 +9,19 @@ using Microsoft.OpenApi.Models;
 using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.Behaviors;
+using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Jwt;
+using NomoAI.API.Common.Redis;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
+using NomoAI.API.Features.Admin;
 using NomoAI.API.Features.Auth;
 using NomoAI.API.Features.Children;
 using NomoAI.API.Features.Parents;
 using NomoAI.API.Infrastructure;
 using NomoAI.API.Infrastructure.Email;
 using NomoAI.API.Persistence;
+using StackExchange.Redis;
 using System.Reflection;
 using System.Text;
 using NomoAI.API.Common.EmailOtp;
@@ -152,6 +156,14 @@ namespace NomoAI.API
             builder.Services.AddScoped<
                 IEmailSender,
                 SmtpEmailSender>();
+
+            builder.Services.AddSingleton<
+                IEmailTemplateBuilder,
+                EmailTemplateBuilder>();
+
+            builder.Services.AddScoped<
+                IEmailOtpDispatcher,
+                EmailOtpDispatcher>();
 
            
             //////////////////////
@@ -343,6 +355,9 @@ namespace NomoAI.API
             app.MapParentsEndpoints();
             app.MapChildrenEndpoints();
             app.MapActivitiesEndpoints();
+            app.MapAdminEndpoints();
+
+
             app.MapControllers();
 
             app.Run();

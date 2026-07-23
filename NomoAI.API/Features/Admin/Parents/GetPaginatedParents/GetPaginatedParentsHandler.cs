@@ -4,38 +4,39 @@ using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Persistence;
 
-namespace NomoAI.API.Features.Parents.SearchParents;
+namespace NomoAI.API.Features.Admin.Parents.GetPaginatedParents;
 
-internal sealed class SearchParentsHandler
+internal sealed class GetPaginatedParentsHandler
     : IRequestHandler<
-        SearchParentsQuery,
-        Result<SearchParentsResponse>>
+        GetPaginatedParentsQuery,
+        Result<GetPaginatedParentsResponse>>
 {
     private readonly AppDbContext _dbContext;
 
-    public SearchParentsHandler(AppDbContext dbContext)
+    public GetPaginatedParentsHandler(
+        AppDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
-    public async Task<Result<SearchParentsResponse>> Handle(
-        SearchParentsQuery request,
+    public async Task<Result<GetPaginatedParentsResponse>> Handle(
+        GetPaginatedParentsQuery request,
         CancellationToken cancellationToken)
     {
         IQueryable<Parent> query =
-            BuildSearchQuery(request.SearchTerm);
+            BuildParentsQuery();
 
         int totalCount =
             await query.CountAsync(cancellationToken);
 
-        List<ParentSearchItemResponse> parents =
+        List<ParentListItemResponse> parents =
             await GetPageAsync(
                 query,
                 request.PageNumber,
                 request.PageSize,
                 cancellationToken);
 
-        SearchParentsResponse response =
+        GetPaginatedParentsResponse response =
             CreateResponse(
                 parents,
                 request.PageNumber,
@@ -45,41 +46,15 @@ internal sealed class SearchParentsHandler
         return Result.Success(response);
     }
 
-    private IQueryable<Parent> BuildSearchQuery(
-        string searchTerm)
+    private IQueryable<Parent> BuildParentsQuery()
     {
-        string normalizedSearchTerm =
-            searchTerm.Trim();
-
-        string searchPattern =
-            $"%{normalizedSearchTerm}%";
-
         return _dbContext.Parents
             .AsNoTracking()
             .Where(parent =>
-                !parent.User.IsDeleted &&
-                (
-                    EF.Functions.Like(
-                        parent.User.Fullname,
-                        searchPattern) ||
-
-                    (
-                        parent.User.Email != null &&
-                        EF.Functions.Like(
-                            parent.User.Email,
-                            searchPattern)
-                    ) ||
-
-                    (
-                        parent.User.PhoneNumber != null &&
-                        EF.Functions.Like(
-                            parent.User.PhoneNumber,
-                            searchPattern)
-                    )
-                ));
+                !parent.User.IsDeleted);
     }
 
-    private static async Task<List<ParentSearchItemResponse>>
+    private static async Task<List<ParentListItemResponse>>
         GetPageAsync(
             IQueryable<Parent> query,
             int pageNumber,
@@ -95,7 +70,7 @@ internal sealed class SearchParentsHandler
             .Skip(recordsToSkip)
             .Take(pageSize)
             .Select(parent =>
-                new ParentSearchItemResponse(
+                new ParentListItemResponse(
                     parent.Id,
                     parent.UserId,
                     parent.User.Fullname,
@@ -104,8 +79,8 @@ internal sealed class SearchParentsHandler
             .ToListAsync(cancellationToken);
     }
 
-    private static SearchParentsResponse CreateResponse(
-        IReadOnlyList<ParentSearchItemResponse> parents,
+    private static GetPaginatedParentsResponse CreateResponse(
+        IReadOnlyList<ParentListItemResponse> parents,
         int pageNumber,
         int pageSize,
         int totalCount)
@@ -115,12 +90,14 @@ internal sealed class SearchParentsHandler
                 totalCount,
                 pageSize);
 
-        return new SearchParentsResponse(
+        return new GetPaginatedParentsResponse(
             parents,
             pageNumber,
             pageSize,
             totalCount,
-            totalPages);
+            totalPages,
+            HasPreviousPage: pageNumber > 1,
+            HasNextPage: pageNumber < totalPages);
     }
 
     private static int CalculateTotalPages(

@@ -37,10 +37,7 @@ public sealed class ConfirmEmailHandler
             await _userManager.FindByIdAsync(
                 request.UserId);
 
-        /*
-         * لا نكشف هل UserId غير موجود أم الكود خاطئ.
-         * من وجهة نظر المستخدم، عملية التأكيد غير صالحة.
-         */
+
         if (user is null || user.IsDeleted)
         {
             return Result.Failure(

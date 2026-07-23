@@ -19,7 +19,10 @@ namespace NomoAI.API.Features.Profile.GetUserProfile
             .RequireAuthorization()
             .WithName("Profile")
             .WithTags("Profile")
-            .WithSummary("Get current user's profile");
+            .WithSummary("Get current user's profile")
+            .Produces<UserProfileResponse>(StatusCodes.Status200OK)
+            .Produces<Error>(StatusCodes.Status401Unauthorized)
+            .Produces<Error>(StatusCodes.Status404NotFound);
         }
     }
 }

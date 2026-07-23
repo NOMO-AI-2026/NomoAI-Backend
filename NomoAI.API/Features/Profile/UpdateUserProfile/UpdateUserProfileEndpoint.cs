@@ -19,7 +19,10 @@ namespace NomoAI.API.Features.Profile.UpdateUserProfile
             .RequireAuthorization()
             .WithName("UpdateMyProfile")
             .WithTags("Profile")
-            .WithSummary("Update current user's profile");
+            .WithSummary("Update current user's profile")
+            .Produces<bool>(StatusCodes.Status200OK)
+            .Produces<Error>(StatusCodes.Status401Unauthorized)
+            .Produces<Error>(StatusCodes.Status404NotFound);
         }
     }
 }

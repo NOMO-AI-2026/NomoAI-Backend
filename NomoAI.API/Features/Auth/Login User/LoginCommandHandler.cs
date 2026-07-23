@@ -26,7 +26,7 @@ namespace NomoAI.API.Features.Auth.Login_User
         {
             // 1. Find user by email
             var user = await _userManager.FindByEmailAsync(request.Email);
-            if (user is null)
+            if (user is null || user.IsDeleted)
             {
                 return Result.Failure<LoginResponseDto>(AuthErrors.InvalidCredentials);
             }

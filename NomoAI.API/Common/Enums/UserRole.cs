@@ -2,7 +2,8 @@
 {
     public enum UserRole
     {
-        Doctor,
-        Parent
+        Doctor=0,
+        Parent=1,
+        Admin=2
     }
 }

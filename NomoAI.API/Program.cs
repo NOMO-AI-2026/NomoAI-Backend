@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
+using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Behaviors;
 using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Jwt;
@@ -18,7 +19,9 @@ using NomoAI.API.Features.Admin;
 using NomoAI.API.Features.Auth;
 using NomoAI.API.Features.Children;
 using NomoAI.API.Features.Parents;
+using NomoAI.API.Features.Sessions;
 using NomoAI.API.Infrastructure;
+using NomoAI.API.Infrastructure.Ai;
 using NomoAI.API.Infrastructure.Email;
 using NomoAI.API.Persistence;
 using StackExchange.Redis;
@@ -44,7 +47,12 @@ namespace NomoAI.API
             builder.Services.AddSwaggerGen(
             options =>
             {
-               
+                options.MapType<IFormFile>(() => new OpenApiSchema
+                {
+                    Type = "string",
+                    Format = "binary"
+                });
+
                 options.AddSecurityDefinition(
                     "Bearer",
                     new OpenApiSecurityScheme
@@ -335,6 +343,15 @@ namespace NomoAI.API
             //Role Manger 
             builder.Services.AddScoped<IRoleManger , RoleManger>();
 
+            // AI Core (FastAPI) integration
+            builder.Services.AddAiService(builder.Configuration);
+
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.Limits.MaxRequestBodySize =
+                    AiServiceOptions.DefaultMaxAudioBytes + (1024 * 1024);
+            });
+
             var app = builder.Build();
 
            
@@ -356,7 +373,12 @@ namespace NomoAI.API
             app.MapChildrenEndpoints();
             app.MapActivitiesEndpoints();
             app.MapAdminEndpoints();
+            app.MapSessionsEndpoints();
 
+            app.MapHealthChecks("/health/ai", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("ai")
+            });
 
             app.MapControllers();
 

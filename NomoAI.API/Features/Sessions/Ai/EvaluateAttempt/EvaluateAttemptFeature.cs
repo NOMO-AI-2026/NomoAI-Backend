@@ -8,8 +8,55 @@ using NomoAI.API.Common.Ai.Contracts;
 
 namespace NomoAI.API.Features.Sessions.Ai.EvaluateAttempt;
 
+/// <summary>
+/// Multipart form contract for Swagger and Minimal API [FromForm] binding.
+/// Property names match the FastAPI form field names (camelCase via default form binding).
+/// </summary>
+public sealed class EvaluateAttemptFormRequest
+{
+    public IFormFile? Audio { get; init; }
+
+    public string TargetValue { get; init; } = string.Empty;
+
+    public int ConsecutiveNoSpeechCount { get; init; }
+
+    public string SpeechLevel { get; init; } = string.Empty;
+
+    public int? MaximumAttempts { get; init; }
+
+    public string? AdditionalContext { get; init; }
+
+    public string ActivityType { get; init; } = string.Empty;
+
+    public string ActivityId { get; init; } = string.Empty;
+
+    public int? SessionStepNumber { get; init; }
+
+    public string? SessionId { get; init; }
+
+    public string? PreviousDecision { get; init; }
+
+    public int AttemptNumber { get; init; }
+
+    public string ChildId { get; init; } = string.Empty;
+
+    /// <summary>JSON array string, e.g. [40.5,55].</summary>
+    public string? PreviousAttemptScores { get; init; }
+
+    public string Language { get; init; } = "ar";
+
+    public int Age { get; init; }
+}
+
+/// <summary>
+/// MediatR command uses Stream metadata instead of IFormFile to keep handlers transport-agnostic.
+/// The endpoint owns opening/disposing the audio stream around Send.
+/// </summary>
 public sealed record EvaluateAttemptCommand(
-    IFormFile Audio,
+    Stream? AudioStream,
+    string FileName,
+    string ContentType,
+    long AudioLengthBytes,
     string ChildId,
     string ActivityId,
     string ActivityType,
@@ -52,15 +99,22 @@ public sealed class EvaluateAttemptCommandValidator : AbstractValidator<Evaluate
     {
         long maxBytes = options.Value.MaxAudioBytes;
 
-        RuleFor(x => x.Audio)
+        RuleFor(x => x.AudioStream)
             .NotNull()
-            .WithMessage("Audio file is required.")
-            .Must(file => file is { Length: > 0 })
+            .WithMessage("Audio file is required.");
+
+        RuleFor(x => x.AudioLengthBytes)
+            .GreaterThan(0)
             .WithMessage("Audio file must not be empty.")
-            .Must(file => file is null || file.Length <= maxBytes)
-            .WithMessage($"Audio file must not exceed {maxBytes} bytes.")
-            .Must(HaveAllowedContentType)
-            .WithMessage("Audio content type is not supported.")
+            .LessThanOrEqualTo(maxBytes)
+            .WithMessage($"Audio file must not exceed {maxBytes} bytes.");
+
+        RuleFor(x => x.ContentType)
+            .Must(BeAllowedContentType)
+            .WithMessage("Audio content type is not supported.");
+
+        RuleFor(x => x.FileName)
+            .NotEmpty()
             .Must(HaveAllowedExtension)
             .WithMessage("Audio file extension is not supported.");
 
@@ -74,28 +128,44 @@ public sealed class EvaluateAttemptCommandValidator : AbstractValidator<Evaluate
         RuleFor(x => x.Language).NotEmpty().MaximumLength(16);
         RuleFor(x => x.ConsecutiveNoSpeechCount).InclusiveBetween(0, 20);
         RuleFor(x => x.AdditionalContext).MaximumLength(1000).When(x => x.AdditionalContext is not null);
+        RuleFor(x => x.PreviousAttemptScoresJson)
+            .Must(BeValidScoresJsonOrEmpty)
+            .WithMessage("previousAttemptScores must be a JSON array of numbers between 0 and 100.")
+            .When(x => !string.IsNullOrWhiteSpace(x.PreviousAttemptScoresJson));
     }
 
-    private static bool HaveAllowedContentType(IFormFile? file)
+    private static bool BeAllowedContentType(string? contentType)
     {
-        if (file is null)
+        string normalized = (contentType ?? string.Empty).Split(';')[0].Trim();
+        return string.IsNullOrWhiteSpace(normalized) || AllowedContentTypes.Contains(normalized);
+    }
+
+    private static bool HaveAllowedExtension(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
         {
             return false;
         }
 
-        string contentType = (file.ContentType ?? string.Empty).Split(';')[0].Trim();
-        return string.IsNullOrWhiteSpace(contentType) || AllowedContentTypes.Contains(contentType);
+        return AllowedExtensions.Contains(Path.GetExtension(fileName));
     }
 
-    private static bool HaveAllowedExtension(IFormFile? file)
+    private static bool BeValidScoresJsonOrEmpty(string? raw)
     {
-        if (file is null)
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        try
+        {
+            var scores = System.Text.Json.JsonSerializer.Deserialize<List<double>>(raw);
+            return scores is not null && scores.All(score => score is >= 0 and <= 100);
+        }
+        catch (System.Text.Json.JsonException)
         {
             return false;
         }
-
-        string extension = Path.GetExtension(file.FileName);
-        return AllowedExtensions.Contains(extension);
     }
 }
 
@@ -109,21 +179,19 @@ public sealed class EvaluateAttemptCommandHandler
         _aiCoreClient = aiCoreClient;
     }
 
-    public async Task<Result<AiEvaluateAttemptResponse>> Handle(
+    public Task<Result<AiEvaluateAttemptResponse>> Handle(
         EvaluateAttemptCommand request,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<double>? previousScores = ParsePreviousScores(request.PreviousAttemptScoresJson);
 
-        await using Stream audioStream = request.Audio.OpenReadStream();
-
         var aiRequest = new AiEvaluateAttemptRequest
         {
-            AudioStream = audioStream,
-            FileName = Path.GetFileName(request.Audio.FileName),
-            ContentType = (request.Audio.ContentType ?? "application/octet-stream")
-                .Split(';')[0]
-                .Trim(),
+            AudioStream = request.AudioStream!,
+            FileName = Path.GetFileName(request.FileName),
+            ContentType = string.IsNullOrWhiteSpace(request.ContentType)
+                ? "application/octet-stream"
+                : request.ContentType.Split(';')[0].Trim(),
             ChildId = request.ChildId,
             ActivityId = request.ActivityId,
             ActivityType = request.ActivityType,
@@ -141,7 +209,7 @@ public sealed class EvaluateAttemptCommandHandler
             AdditionalContext = request.AdditionalContext
         };
 
-        return await _aiCoreClient.EvaluateAttemptAsync(aiRequest, cancellationToken);
+        return _aiCoreClient.EvaluateAttemptAsync(aiRequest, cancellationToken);
     }
 
     private static IReadOnlyList<double>? ParsePreviousScores(string? raw)
@@ -162,45 +230,6 @@ public sealed class EvaluateAttemptCommandHandler
     }
 }
 
-/// <summary>
-/// Single multipart form model so Swashbuckle can document file + fields together.
-/// Do not bind IFormFile with separate [FromForm] parameters.
-/// </summary>
-public sealed class EvaluateAttemptFormRequest
-{
-    public IFormFile Audio { get; init; } = null!;
-
-    public string ChildId { get; init; } = string.Empty;
-
-    public string ActivityId { get; init; } = string.Empty;
-
-    public string ActivityType { get; init; } = string.Empty;
-
-    public string TargetValue { get; init; } = string.Empty;
-
-    public string SpeechLevel { get; init; } = string.Empty;
-
-    public int Age { get; init; }
-
-    public int AttemptNumber { get; init; }
-
-    public string? SessionId { get; init; }
-
-    public int? SessionStepNumber { get; init; }
-
-    public int? MaximumAttempts { get; init; }
-
-    public string? PreviousAttemptScores { get; init; }
-
-    public string? PreviousDecision { get; init; }
-
-    public int ConsecutiveNoSpeechCount { get; init; }
-
-    public string Language { get; init; } = "ar";
-
-    public string? AdditionalContext { get; init; }
-}
-
 public static class EvaluateAttemptEndpoint
 {
     public static void MapEndpoint(RouteGroupBuilder group)
@@ -209,10 +238,14 @@ public static class EvaluateAttemptEndpoint
             .MapPost("/evaluate", HandleAsync)
             .RequireAuthorization(policy =>
                 policy.RequireRole("Doctor", "Parent"))
+            // Bearer JWT APIs do not use cookie antiforgery. Disable only on this
+            // multipart Minimal API endpoint (not globally). See docs/ai-core-integration.md.
             .DisableAntiforgery()
             .WithName("EvaluateAttemptAi")
             .WithSummary("Evaluate an audio attempt via AI Core")
-            .Accepts<EvaluateAttemptFormRequest>("multipart/form-data")
+            .WithDescription(
+                "Accepts multipart/form-data with a required audio file and attempt metadata. " +
+                "Forwards the audio stream to the AI Core evaluate endpoint.")
             .Produces<AiEvaluateAttemptResponse>(StatusCodes.Status200OK)
             .Produces<Error>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
@@ -221,27 +254,43 @@ public static class EvaluateAttemptEndpoint
     }
 
     private static async Task<IResult> HandleAsync(
-        [FromForm] EvaluateAttemptFormRequest form,
+        [FromForm] EvaluateAttemptFormRequest request,
         ISender sender,
         CancellationToken cancellationToken = default)
     {
+        string fileName = request.Audio is null
+            ? string.Empty
+            : Path.GetFileName(request.Audio.FileName);
+
+        string contentType = request.Audio is null
+            ? string.Empty
+            : (request.Audio.ContentType ?? "application/octet-stream").Split(';')[0].Trim();
+
+        long length = request.Audio?.Length ?? 0;
+
+        // Endpoint owns the stream lifetime for the duration of the MediatR call.
+        await using Stream? audioStream = request.Audio?.OpenReadStream();
+
         var command = new EvaluateAttemptCommand(
-            form.Audio,
-            form.ChildId,
-            form.ActivityId,
-            form.ActivityType,
-            form.TargetValue,
-            form.SpeechLevel,
-            form.Age,
-            form.AttemptNumber,
-            form.SessionId,
-            form.SessionStepNumber,
-            form.MaximumAttempts,
-            form.PreviousAttemptScores,
-            form.PreviousDecision,
-            form.ConsecutiveNoSpeechCount,
-            form.Language,
-            form.AdditionalContext);
+            audioStream,
+            fileName,
+            contentType,
+            length,
+            request.ChildId,
+            request.ActivityId,
+            request.ActivityType,
+            request.TargetValue,
+            request.SpeechLevel,
+            request.Age,
+            request.AttemptNumber,
+            request.SessionId,
+            request.SessionStepNumber,
+            request.MaximumAttempts,
+            request.PreviousAttemptScores,
+            request.PreviousDecision,
+            request.ConsecutiveNoSpeechCount,
+            request.Language,
+            request.AdditionalContext);
 
         Result<AiEvaluateAttemptResponse> result =
             await sender.Send(command, cancellationToken);

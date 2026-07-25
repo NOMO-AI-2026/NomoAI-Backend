@@ -109,6 +109,19 @@ Retries apply only to transient failures (`429`, `502`, `503`, `504`, network er
 
 **EvaluateAttempt does not auto-retry** because multipart audio streams are not safely replayable.
 
+## Evaluate endpoint (Swagger multipart)
+
+`POST /api/sessions/ai/evaluate` accepts `multipart/form-data` with:
+
+- `Audio` — required binary file (Swagger file picker)
+- Form fields: `ChildId`, `ActivityId`, `ActivityType`, `TargetValue`, `SpeechLevel`, `Age`, `AttemptNumber`, plus optional metadata
+
+Swagger metadata is corrected by `EvaluateAttemptFormOperationFilter` because Swashbuckle otherwise renders a single JSON-like `form` object for `[FromForm]` complex types on Minimal APIs.
+
+### Antiforgery
+
+This API authenticates with **Bearer JWT**, not cookies, and does not enable antiforgery middleware globally. The evaluate Minimal API endpoint calls `.DisableAntiforgery()` **only on that route** so multipart uploads work without antiforgery tokens. Do not disable antiforgery globally.
+
 ## Manual local integration checklist
 
 1. FastAPI `/health` returns ok without a key.
@@ -117,3 +130,5 @@ Retries apply only to transient failures (`429`, `502`, `503`, `504`, network er
 4. ASP.NET starts even if FastAPI is offline (health check fails; app still runs).
 5. Plan / evaluate / summary succeed with a valid JWT and matching service key.
 6. Switching `AiService__BaseUrl` / `AiService__ServiceKey` retargets the client without code changes.
+7. Swagger evaluate shows a file picker for `Audio` and individual form fields (not a single JSON `form` object).
+

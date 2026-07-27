@@ -17,12 +17,14 @@ namespace NomoAI.API.Features.AdminDashboard.GetAllDoctors
         {
             var query = _db.Doctor
                 .AsNoTracking()
-                .Where(d => !d.IsDeleted && d.IsApproved == request.IsApproved)
+                .Where(d => !d.IsDeleted && (request.IsApproved == null || d.IsApproved == request.IsApproved))
                 .Select(d => new DoctorResponse
                 {
                     UserId = d.UserId,
                     FullName = d.User.Fullname,
-                    Email = d.User.Email ?? string.Empty
+                    Email = d.User.Email ?? string.Empty,
+                    IsApproved = d.IsApproved,
+
                 })
                 .OrderBy(d => d.FullName)
                 .AsQueryable();

@@ -51,7 +51,7 @@ internal sealed class GetPaginatedParentsHandler
         return _dbContext.Parents
             .AsNoTracking()
             .Where(parent =>
-                !parent.User.IsDeleted);
+                !parent.User.IsDeleted && !parent.IsDeleted);
     }
 
     private static async Task<List<ParentListItemResponse>>
@@ -71,7 +71,6 @@ internal sealed class GetPaginatedParentsHandler
             .Take(pageSize)
             .Select(parent =>
                 new ParentListItemResponse(
-                    parent.Id,
                     parent.UserId,
                     parent.User.Fullname,
                     parent.User.Email ?? string.Empty,

@@ -10,7 +10,6 @@ public sealed record GetPaginatedParentsResponse(
     bool HasNextPage);
 
 public sealed record ParentListItemResponse(
-    int ParentId,
     string UserId,
     string Fullname,
     string Email,

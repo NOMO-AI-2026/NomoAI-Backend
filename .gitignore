@@ -361,3 +361,14 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local AI smoke-test outputs
+scripts/*-results.json
+scripts/*-result.json
+scripts/*-error.json
+scripts/*-summary.json
+scripts/plan-body.json
+scripts/vps-*.json
+scripts/aspnet-*.json
+scripts/ai-demo-*.json
+scripts/plan-*.json

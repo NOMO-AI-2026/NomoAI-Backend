@@ -20,7 +20,7 @@ public sealed class AiServiceOptionsValidator : IValidateOptions<AiServiceOption
         {
             errors.Add("AiService:BaseUrl is required.");
         }
-        else if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out Uri? uri) ||
+        else if (!Uri.TryCreate(options.BaseUrl.Trim(), UriKind.Absolute, out Uri? uri) ||
                  (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             errors.Add("AiService:BaseUrl must be an absolute HTTP or HTTPS URL.");

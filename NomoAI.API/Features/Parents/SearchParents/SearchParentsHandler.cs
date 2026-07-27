@@ -57,7 +57,7 @@ internal sealed class SearchParentsHandler
         return _dbContext.Parents
             .AsNoTracking()
             .Where(parent =>
-                !parent.User.IsDeleted &&
+                !parent.User.IsDeleted && !parent.IsDeleted && 
                 (
                     EF.Functions.Like(
                         parent.User.Fullname,

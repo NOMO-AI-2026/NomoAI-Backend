@@ -15,7 +15,7 @@ public sealed class AiServiceOptions
 
     public string ServiceKey { get; init; } = string.Empty;
 
-    public int TimeoutSeconds { get; init; } = 120;
+    public int TimeoutSeconds { get; init; } = 180;
 
     public int HealthTimeoutSeconds { get; init; } = 10;
 

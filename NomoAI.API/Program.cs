@@ -53,6 +53,8 @@ namespace NomoAI.API
                     Format = "binary"
                 });
 
+                options.OperationFilter<EvaluateAttemptFormOperationFilter>();
+
                 options.AddSecurityDefinition(
                     "Bearer",
                     new OpenApiSecurityScheme

@@ -23,7 +23,9 @@ public static class AiServiceServiceCollectionExtensions
         services.AddHttpClient<IAiCoreClient, AiCoreClient>((sp, client) =>
             {
                 AiServiceOptions options = sp.GetRequiredService<IOptions<AiServiceOptions>>().Value;
-                client.BaseAddress = new Uri(EnsureTrailingSlash(options.BaseUrl));
+                client.BaseAddress = AiServiceBaseUrlNormalizer.CreateBaseAddress(options.BaseUrl);
+                // Per-request timeouts are enforced via CancellationTokenSource in AiCoreClient.
+                // TLS certificate validation remains enabled (default HttpClient handler).
                 client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             });
 
@@ -33,10 +35,5 @@ public static class AiServiceServiceCollectionExtensions
                 tags: ["ready", "ai"]);
 
         return services;
-    }
-
-    private static string EnsureTrailingSlash(string baseUrl)
-    {
-        return baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/";
     }
 }

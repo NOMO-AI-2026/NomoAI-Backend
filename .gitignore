@@ -361,7 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/NomoAI.API/Features/Profile/GetUserProfile/UserProfileResponse.cs
 
 # Local AI smoke-test outputs
 scripts/*-results.json

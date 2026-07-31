@@ -9,9 +9,8 @@ public static class SearchParentsEndpoint
     {
         group
             .MapGet("/search", HandleAsync)
-            //.RequireAuthorization(policy =>
-            //    policy.RequireRole("Admin"))
-            .AllowAnonymous()
+            .RequireAuthorization(policy =>
+                policy.RequireRole("Doctor", "Admin"))
             .WithName("SearchParents")
             .WithSummary("Search for parents")
             .WithDescription(

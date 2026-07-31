@@ -39,6 +39,40 @@ namespace NomoAI.API.Persistence
 
         public DbSet<AttemptTranscribtion> AttemptTranscribtions { get; set; }
 
+        public DbSet<SupportTicket> SupportTickets { get; set; }
 
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            builder.Entity<SupportTicket>(entity =>
+            {
+                entity.Property(ticket => ticket.Subject)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(ticket => ticket.Message)
+                    .HasMaxLength(2000)
+                    .IsRequired();
+
+                entity.Property(ticket => ticket.AdminNote)
+                    .HasMaxLength(1000);
+
+                entity.Property(ticket => ticket.HandledByAdminUserId)
+                    .HasMaxLength(450);
+
+                entity.Property(ticket => ticket.UserId)
+                    .HasMaxLength(450)
+                    .IsRequired();
+
+                entity.HasIndex(ticket => ticket.Status);
+
+                entity.HasOne(ticket => ticket.User)
+                    .WithMany()
+                    .HasForeignKey(ticket => ticket.UserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
+            });
+        }
     }
 }

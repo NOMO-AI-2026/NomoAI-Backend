@@ -12,7 +12,6 @@ public static class AssignChildToParentEndpoint
             .MapPut("/{childId:int}/parent", HandleAsync)
             .RequireAuthorization(policy =>
                 policy.RequireRole("Doctor"))
-              .AllowAnonymous()
             .WithName("AssignChildToParent")
             .WithSummary("Assign a child to a parent")
             .WithDescription(

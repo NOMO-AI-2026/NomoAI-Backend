@@ -9,4 +9,6 @@ public sealed record GetMySupportTicketDetailsResponse(
     SupportTicketStatus Status,
     string? AdminNote,
     DateTime? HandledAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool CanEdit,
+    bool CanDelete);

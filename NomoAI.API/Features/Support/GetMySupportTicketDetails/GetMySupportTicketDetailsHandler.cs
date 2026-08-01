@@ -35,6 +35,7 @@ internal sealed class GetMySupportTicketDetailsHandler
                 item.Status,
                 item.AdminNote,
                 item.HandledAt,
+                item.HandledByAdminUserId,
                 item.CreatedAt
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -54,6 +55,11 @@ internal sealed class GetMySupportTicketDetailsHandler
                 SupportErrors.Forbidden);
         }
 
+        bool canModify = SupportTicketRules.CanUserModify(
+            ticket.Status,
+            ticket.HandledAt,
+            ticket.HandledByAdminUserId);
+
         var response = new GetMySupportTicketDetailsResponse(
             ticket.Id,
             ticket.Subject,
@@ -61,7 +67,9 @@ internal sealed class GetMySupportTicketDetailsHandler
             ticket.Status,
             ticket.AdminNote,
             ticket.HandledAt,
-            ticket.CreatedAt);
+            ticket.CreatedAt,
+            canModify,
+            canModify);
 
         return Result.Success(response);
     }

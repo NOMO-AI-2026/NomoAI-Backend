@@ -13,4 +13,9 @@ public static class SupportErrors
         "Support.Forbidden",
         "You do not have permission to access this support ticket.",
         StatusCodes.Status403Forbidden);
+
+    public static readonly Error TicketLockedByAdmin = new(
+        "Support.TicketLockedByAdmin",
+        "This support ticket can no longer be edited or deleted because an admin has already taken action on it.",
+        StatusCodes.Status409Conflict);
 }

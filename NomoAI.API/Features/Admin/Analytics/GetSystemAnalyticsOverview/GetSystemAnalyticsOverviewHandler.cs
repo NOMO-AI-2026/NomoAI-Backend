@@ -129,22 +129,39 @@ internal sealed class GetSystemAnalyticsOverviewHandler
 
         int progressAlertsTotal = alertTypeCounts.Values.Sum();
 
-        Dictionary<SupportTicketStatus, int> supportStatusCounts =
-            await _dbContext.SupportTickets
-                .AsNoTracking()
-                .Where(ticket => !ticket.IsDeleted)
-                .GroupBy(ticket => ticket.Status)
-                .Select(group => new
-                {
-                    Status = group.Key,
-                    Count = group.Count()
-                })
-                .ToDictionaryAsync(
-                    item => item.Status,
-                    item => item.Count,
-                    cancellationToken);
+        var supportStats = await _dbContext.SupportTickets
+            .AsNoTracking()
+            .Where(ticket => !ticket.IsDeleted)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Total = group.Count(),
+                Open = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.Open),
+                InProgress = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.InProgress),
+                Resolved = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.Resolved),
+                Closed = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.Closed),
+                AwaitingAdminAction = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.Open &&
+                    ticket.HandledAt == null),
+                HandledByAdmin = group.Count(ticket =>
+                    ticket.HandledAt != null ||
+                    ticket.Status != SupportTicketStatus.Open),
+                UserMutableOpen = group.Count(ticket =>
+                    ticket.Status == SupportTicketStatus.Open &&
+                    ticket.HandledAt == null &&
+                    ticket.HandledByAdminUserId == null),
+                LockedForUser = group.Count(ticket =>
+                    !(ticket.Status == SupportTicketStatus.Open &&
+                      ticket.HandledAt == null &&
+                      ticket.HandledByAdminUserId == null))
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        int supportTicketsTotal = supportStatusCounts.Values.Sum();
+        int supportTicketsTotal = supportStats?.Total ?? 0;
 
         List<SpeechLevelChildrenCountResponse> childrenPerLevel =
             await _dbContext.SpeechLevels
@@ -202,14 +219,18 @@ internal sealed class GetSystemAnalyticsOverviewHandler
             Support: new SupportAnalyticsResponse(
                 TicketsTotal: supportTicketsTotal,
                 ByStatus: new SupportTicketsByStatusResponse(
-                    Open: supportStatusCounts.GetValueOrDefault(
-                        SupportTicketStatus.Open),
-                    InProgress: supportStatusCounts.GetValueOrDefault(
-                        SupportTicketStatus.InProgress),
-                    Resolved: supportStatusCounts.GetValueOrDefault(
-                        SupportTicketStatus.Resolved),
-                    Closed: supportStatusCounts.GetValueOrDefault(
-                        SupportTicketStatus.Closed))),
+                    Open: supportStats?.Open ?? 0,
+                    InProgress: supportStats?.InProgress ?? 0,
+                    Resolved: supportStats?.Resolved ?? 0,
+                    Closed: supportStats?.Closed ?? 0),
+                AwaitingAdminAction:
+                    supportStats?.AwaitingAdminAction ?? 0,
+                HandledByAdmin:
+                    supportStats?.HandledByAdmin ?? 0,
+                UserMutableOpen:
+                    supportStats?.UserMutableOpen ?? 0,
+                LockedForUser:
+                    supportStats?.LockedForUser ?? 0),
             SpeechLevels: new SpeechLevelsAnalyticsResponse(
                 CatalogCount: childrenPerLevel.Count,
                 ChildrenPerLevel: childrenPerLevel));

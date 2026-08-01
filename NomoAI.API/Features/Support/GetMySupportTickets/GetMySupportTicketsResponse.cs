@@ -19,4 +19,6 @@ public sealed record MySupportTicketItemResponse(
     DateTime CreatedAt,
     string? AdminNote,
     DateTime? HandledAt,
-    bool HasAdminNote);
+    bool HasAdminNote,
+    bool CanEdit,
+    bool CanDelete);

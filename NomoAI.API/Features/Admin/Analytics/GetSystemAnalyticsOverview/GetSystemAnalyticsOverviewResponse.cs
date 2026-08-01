@@ -48,7 +48,11 @@ public sealed record AlertsByTypeResponse(
 
 public sealed record SupportAnalyticsResponse(
     int TicketsTotal,
-    SupportTicketsByStatusResponse ByStatus);
+    SupportTicketsByStatusResponse ByStatus,
+    int AwaitingAdminAction,
+    int HandledByAdmin,
+    int UserMutableOpen,
+    int LockedForUser);
 
 public sealed record SupportTicketsByStatusResponse(
     int Open,

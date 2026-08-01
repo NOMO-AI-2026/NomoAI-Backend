@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Entities;
+using NomoAI.API.Domain.Enums;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Support.GetMySupportTickets;
@@ -51,7 +52,13 @@ internal sealed class GetMySupportTicketsHandler
                         ticket.AdminNote,
                         ticket.HandledAt,
                         ticket.AdminNote != null &&
-                        ticket.AdminNote != string.Empty))
+                        ticket.AdminNote != string.Empty,
+                        ticket.Status == SupportTicketStatus.Open &&
+                        ticket.HandledAt == null &&
+                        ticket.HandledByAdminUserId == null,
+                        ticket.Status == SupportTicketStatus.Open &&
+                        ticket.HandledAt == null &&
+                        ticket.HandledByAdminUserId == null))
                 .ToListAsync(cancellationToken);
 
         int totalPages =

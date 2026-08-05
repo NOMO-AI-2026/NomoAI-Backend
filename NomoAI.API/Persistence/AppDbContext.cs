@@ -90,6 +90,32 @@ namespace NomoAI.API.Persistence
                     session.IsDeleted
                 });
             });
+
+            builder.Entity<SessionAttempts>(entity =>
+            {
+                entity
+                    .HasOne(attempt => attempt.Session)
+                    .WithMany()
+                    .HasForeignKey(attempt => attempt.SessionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Filtered unique index (soft-deleted attempts do not block re-attempt numbering).
+                entity
+                    .HasIndex(attempt => new { attempt.SessionId, attempt.AttemptNumber })
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+            });
+
+            builder.Entity<AttemptEvaluation>(entity =>
+            {
+                // One evaluation per attempt: AttemptId is the real FK (replaces the
+                // legacy non-FK decimal AttemptId + shadow AttemptId1 columns).
+                entity
+                    .HasOne(evaluation => evaluation.Attempt)
+                    .WithOne()
+                    .HasForeignKey<AttemptEvaluation>(evaluation => evaluation.AttemptId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
         }
     }
 }

@@ -39,6 +39,12 @@ public sealed class PlanSessionCommandValidator : AbstractValidator<PlanSessionC
     }
 }
 
+/// <summary>
+/// Backward-compatible proxy handler. The public HTTP contract still accepts
+/// (and echoes back) childId/activityId/sessionId so existing React callers keep
+/// working, but the outbound AI Core call uses the V2 plan endpoint: no database
+/// IDs are sent, and TargetValue is forwarded as the therapy-only "prompt" field.
+/// </summary>
 public sealed class PlanSessionCommandHandler
     : IRequestHandler<PlanSessionCommand, Result<AiSessionPlanResponse>>
 {
@@ -49,28 +55,55 @@ public sealed class PlanSessionCommandHandler
         _aiCoreClient = aiCoreClient;
     }
 
-    public Task<Result<AiSessionPlanResponse>> Handle(
+    public async Task<Result<AiSessionPlanResponse>> Handle(
         PlanSessionCommand request,
         CancellationToken cancellationToken)
     {
-        var aiRequest = new AiSessionPlanRequest
+        var aiRequest = new AiSessionPlanV2Request
         {
-            SessionId = request.SessionId,
-            ChildId = request.ChildId,
-            ActivityId = request.ActivityId,
             ActivityType = request.ActivityType,
-            TargetValue = request.TargetValue,
+            Prompt = request.TargetValue,
             SpeechLevel = request.SpeechLevel,
             Age = request.Age,
             Language = request.Language,
-            MaximumDurationMinutes = request.MaximumDurationMinutes,
-            MaximumSteps = request.MaximumSteps,
-            PreviousSessionSummary = request.PreviousSessionSummary,
-            AdditionalContext = request.AdditionalContext
+            DurationMinutes = request.MaximumDurationMinutes,
+            MaxSteps = request.MaximumSteps,
+            PreviousSummary = request.PreviousSessionSummary,
+            DoctorContext = request.AdditionalContext
         };
 
-        return _aiCoreClient.PlanSessionAsync(aiRequest, cancellationToken);
+        Result<AiSessionPlanV2Response> result =
+            await _aiCoreClient.PlanSessionAsync(aiRequest, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return Result.Failure<AiSessionPlanResponse>(result.Error);
+        }
+
+        return Result.Success(ToLegacyResponse(request, result.Value));
     }
+
+    private static AiSessionPlanResponse ToLegacyResponse(
+        PlanSessionCommand request,
+        AiSessionPlanV2Response v2) => new()
+    {
+        SessionId = request.SessionId,
+        ActivityId = request.ActivityId,
+        ActivityType = v2.ActivityType,
+        TargetValue = v2.Prompt,
+        Title = v2.Title,
+        Objective = v2.Objective,
+        EstimatedDurationMinutes = v2.EstimatedDurationMinutes,
+        Steps = v2.Steps,
+        CompletionCriteria = v2.CompletionCriteria,
+        SafetyNotes = v2.SafetyNotes,
+        KnowledgeSourceIds = v2.KnowledgeSourceIds,
+        KnowledgeChunkIds = v2.KnowledgeChunkIds,
+        Model = v2.Model,
+        UsedFallback = v2.UsedFallback,
+        Regenerated = v2.Regenerated,
+        GeneratedAt = v2.GeneratedAt
+    };
 }
 
 public sealed class PlanSessionHttpRequest

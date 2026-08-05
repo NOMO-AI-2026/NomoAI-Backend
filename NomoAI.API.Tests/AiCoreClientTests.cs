@@ -67,18 +67,19 @@ public class AiCoreClientTests
         var (client, handler, _) = AiCoreClientTestFactory.Create();
         handler.Handler = async (request, _) =>
         {
+            Assert.Equal("/api/v2/sessions/plan", request.RequestUri!.AbsolutePath);
             string body = await request.Content!.ReadAsStringAsync();
-            Assert.Contains("\"childId\":\"child-1\"", body);
             Assert.Contains("\"activityType\":\"word\"", body);
-            Assert.Contains("\"targetValue\":\"بابا\"", body);
+            Assert.Contains("\"prompt\":\"بابا\"", body);
             Assert.Contains("\"speechLevel\":\"vocalization\"", body);
+            Assert.DoesNotContain("childId", body);
+            Assert.DoesNotContain("activityId", body);
+            Assert.DoesNotContain("sessionId", body);
 
             return JsonResponse("""
                 {
-                  "sessionId":"s1",
-                  "activityId":"a1",
                   "activityType":"word",
-                  "targetValue":"بابا",
+                  "prompt":"بابا",
                   "title":"Plan",
                   "objective":"Practice",
                   "estimatedDurationMinutes":10,
@@ -113,12 +114,10 @@ public class AiCoreClientTests
                 """);
         };
 
-        var result = await client.PlanSessionAsync(new AiSessionPlanRequest
+        var result = await client.PlanSessionAsync(new AiSessionPlanV2Request
         {
-            ChildId = "child-1",
-            ActivityId = "a1",
             ActivityType = "word",
-            TargetValue = "بابا",
+            Prompt = "بابا",
             SpeechLevel = "vocalization",
             Age = 8
         });
@@ -136,7 +135,7 @@ public class AiCoreClientTests
         var (client, handler, _) = AiCoreClientTestFactory.Create();
         handler.Handler = async (request, _) =>
         {
-            Assert.Equal("/api/v1/sessions/attempts/evaluate", request.RequestUri!.AbsolutePath);
+            Assert.Equal("/api/v2/sessions/attempts/evaluate", request.RequestUri!.AbsolutePath);
             MultipartFormDataContent multipart = Assert.IsType<MultipartFormDataContent>(request.Content);
 
             HttpContent audio = multipart.First(c =>
@@ -146,25 +145,25 @@ public class AiCoreClientTests
             Assert.Equal("audio/wav", audio.Headers.ContentType!.MediaType);
 
             Dictionary<string, string> fields = await ReadFormFieldsAsync(multipart);
-            Assert.Equal("child-1", fields["childId"]);
-            Assert.Equal("activity-1", fields["activityId"]);
+            Assert.False(fields.ContainsKey("childId"));
+            Assert.False(fields.ContainsKey("activityId"));
+            Assert.False(fields.ContainsKey("sessionId"));
+            Assert.False(fields.ContainsKey("targetValue"));
             Assert.Equal("word", fields["activityType"]);
-            Assert.Equal("بابا", fields["targetValue"]);
+            Assert.Equal("بابا", fields["prompt"]);
             Assert.Equal("1", fields["attemptNumber"]);
 
             return JsonResponse(EvaluateSuccessJson());
         };
 
         await using var audio = new MemoryStream(Encoding.UTF8.GetBytes("RIFF....WAVE"));
-        var result = await client.EvaluateAttemptAsync(new AiEvaluateAttemptRequest
+        var result = await client.EvaluateAttemptAsync(new AiEvaluateAttemptV2Request
         {
             AudioStream = audio,
             FileName = "sample.wav",
             ContentType = "audio/wav",
-            ChildId = "child-1",
-            ActivityId = "activity-1",
             ActivityType = "word",
-            TargetValue = "بابا",
+            Prompt = "بابا",
             SpeechLevel = "vocalization",
             Age = 8,
             AttemptNumber = 1
@@ -320,15 +319,13 @@ public class AiCoreClientTests
         handler.Handler = (_, _) => Task.FromResult(JsonResponse(EvaluateSuccessJson()));
 
         await using var audio = new MemoryStream(Encoding.UTF8.GetBytes("SECRET_AUDIO_BYTES_SHOULD_NOT_LOG"));
-        await client.EvaluateAttemptAsync(new AiEvaluateAttemptRequest
+        await client.EvaluateAttemptAsync(new AiEvaluateAttemptV2Request
         {
             AudioStream = audio,
             FileName = "sample.wav",
             ContentType = "audio/wav",
-            ChildId = "child-1",
-            ActivityId = "activity-1",
             ActivityType = "word",
-            TargetValue = "بابا",
+            Prompt = "بابا",
             SpeechLevel = "vocalization",
             Age = 8,
             AttemptNumber = 1
@@ -340,12 +337,10 @@ public class AiCoreClientTests
         Assert.DoesNotContain("بابا", joined);
     }
 
-    private static AiSessionPlanRequest MinimalPlanRequest() => new()
+    private static AiSessionPlanV2Request MinimalPlanRequest() => new()
     {
-        ChildId = "c",
-        ActivityId = "a",
         ActivityType = "word",
-        TargetValue = "x",
+        Prompt = "x",
         SpeechLevel = "level",
         Age = 7
     };
@@ -379,13 +374,22 @@ public class AiCoreClientTests
 
     private static string EvaluateSuccessJson() => """
         {
-          "sessionId":"s1",
-          "activityId":"activity-1",
           "attemptNumber":1,
           "activityType":"word",
-          "targetValue":"بابا",
+          "prompt":"بابا",
           "speechOutcome":"scored",
           "speechAnalysis":null,
+          "scores":{
+            "kind":"target_based",
+            "accuracy":80,
+            "pronunciation":75,
+            "fluency":70,
+            "completeness":90,
+            "overall":78.75,
+            "matched":true,
+            "scoringMethod":"rules",
+            "reasonCodes":[]
+          },
           "adaptiveDecision":{
             "action":"retry_same",
             "reasonCodes":["first_attempt"],
@@ -399,6 +403,7 @@ public class AiCoreClientTests
             "interventionCategories":[]
           },
           "knowledgeSourceIds":[],
+          "knowledgeChunkIds":[],
           "avatar":{
             "spokenText":"شاطر! دورك.",
             "emotion":"encouraging",

@@ -11,15 +11,27 @@ public interface IAiCoreClient
     Task<Result<AiReadyResponse>> CheckReadinessAsync(
         CancellationToken cancellationToken = default);
 
-    Task<Result<AiSessionPlanResponse>> PlanSessionAsync(
-        AiSessionPlanRequest request,
+    /// <summary>POST /api/v2/sessions/plan — therapy content only, no database IDs.</summary>
+    Task<Result<AiSessionPlanV2Response>> PlanSessionAsync(
+        AiSessionPlanV2Request request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<AiEvaluateAttemptResponse>> EvaluateAttemptAsync(
-        AiEvaluateAttemptRequest request,
+    /// <summary>POST /api/v2/sessions/attempts/evaluate — multipart, no database IDs.</summary>
+    Task<Result<AiEvaluateAttemptV2Response>> EvaluateAttemptAsync(
+        AiEvaluateAttemptV2Request request,
         CancellationToken cancellationToken = default);
 
     Task<Result<AiSessionSummaryResponse>> CreateSessionSummaryAsync(
         AiSessionSummaryRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Synthesizes speech via POST /api/v1/speech/synthesize then downloads the
+    /// resulting audio via GET /api/v1/speech/audio/{audioId}. The returned stream
+    /// is owned by the caller and must be disposed.
+    /// </summary>
+    Task<Result<AiSpeechAudioResult>> SynthesizeSpeechAsync(
+        string text,
+        string? purpose = null,
         CancellationToken cancellationToken = default);
 }

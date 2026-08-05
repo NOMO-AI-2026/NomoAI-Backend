@@ -12,6 +12,7 @@ using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Behaviors;
 using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Jwt;
+using NomoAI.API.Common.Options;
 using NomoAI.API.Common.Redis;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
@@ -39,6 +40,12 @@ namespace NomoAI.API
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            // .NET 8 defaults to :8080; Elastic Beanstalk nginx proxies to :5000.
+            if (!builder.Environment.IsDevelopment())
+            {
+                builder.WebHost.UseUrls("http://127.0.0.1:5000");
+            }
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
@@ -110,16 +117,54 @@ namespace NomoAI.API
                 .AddDefaultTokenProviders();
 
             // CORS
+            builder.Services
+                .AddOptions<CorsOptions>()
+                .Bind(builder.Configuration.GetSection(CorsOptions.SectionName));
+
+            builder.Services
+                .AddOptions<PublicApiOptions>()
+                .Configure(options =>
+                {
+                    options.BaseUrl = builder.Configuration[PublicApiOptions.ConfigKey] ?? string.Empty;
+                });
+
+            string[] allowedOrigins = builder.Configuration
+                .GetSection(CorsOptions.SectionName)
+                .GetSection(nameof(CorsOptions.AllowedOrigins))
+                .Get<string[]>() ?? [];
+
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(
                     "MyPolicy",
                     policy =>
                     {
-                        policy
-                            .AllowAnyMethod()
-                            .AllowAnyOrigin()
-                            .AllowAnyHeader();
+                        if (allowedOrigins.Length > 0)
+                        {
+                            // Explicit allow-list: credentials are safe because origins are known.
+                            policy
+                                .WithOrigins(allowedOrigins)
+                                .AllowAnyHeader()
+                                .AllowAnyMethod()
+                                .AllowCredentials();
+                        }
+                        else if (builder.Environment.IsDevelopment())
+                        {
+                            // No allow-list configured locally: keep permissive DX.
+                            policy
+                                .AllowAnyMethod()
+                                .AllowAnyOrigin()
+                                .AllowAnyHeader();
+                        }
+                        else
+                        {
+                            // Non-Development without an allow-list: deny cross-origin browser calls
+                            // rather than silently defaulting to AllowAnyOrigin.
+                            policy
+                                .WithOrigins(Array.Empty<string>())
+                                .AllowAnyHeader()
+                                .AllowAnyMethod();
+                        }
                     });
             });
 
@@ -356,14 +401,25 @@ namespace NomoAI.API
 
             var app = builder.Build();
 
-           
+            // Elastic Beanstalk / reverse proxies terminate TLS; honor X-Forwarded-* from nginx/ALB.
+            var forwardedHeadersOptions = new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                    | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+            };
+            forwardedHeadersOptions.KnownNetworks.Clear();
+            forwardedHeadersOptions.KnownProxies.Clear();
+            app.UseForwardedHeaders(forwardedHeadersOptions);
 
             app.UseSwagger();
             app.UseSwaggerUI();
 
-            app.UseHttpsRedirection();
+            // Do not force HTTPS redirects behind Elastic Beanstalk HTTP → nginx → Kestrel.
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseHttpsRedirection();
+            }
 
-        
             app.UseCors("MyPolicy");
 
             app.UseAuthentication();
@@ -376,6 +432,9 @@ namespace NomoAI.API
             app.MapActivitiesEndpoints();
             app.MapAdminEndpoints();
             app.MapSessionsEndpoints();
+
+            // Liveness for load balancer / EB health checks (does not depend on AI Core).
+            app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
             app.MapHealthChecks("/health/ai", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
             {

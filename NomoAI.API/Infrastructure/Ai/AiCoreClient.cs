@@ -60,15 +60,15 @@ public sealed class AiCoreClient : IAiCoreClient
             cancellationToken);
     }
 
-    public Task<Result<AiSessionPlanResponse>> PlanSessionAsync(
-        AiSessionPlanRequest request,
+    public Task<Result<AiSessionPlanV2Response>> PlanSessionAsync(
+        AiSessionPlanV2Request request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return SendAsync<AiSessionPlanResponse>(
+        return SendAsync<AiSessionPlanV2Response>(
             HttpMethod.Post,
-            "/api/v1/sessions/plan",
+            "/api/v2/sessions/plan",
             body: request,
             requireServiceKey: true,
             operationName: "PlanSession",
@@ -77,8 +77,8 @@ public sealed class AiCoreClient : IAiCoreClient
             cancellationToken);
     }
 
-    public async Task<Result<AiEvaluateAttemptResponse>> EvaluateAttemptAsync(
-        AiEvaluateAttemptRequest request,
+    public async Task<Result<AiEvaluateAttemptV2Response>> EvaluateAttemptAsync(
+        AiEvaluateAttemptV2Request request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -90,7 +90,7 @@ public sealed class AiCoreClient : IAiCoreClient
         using var content = BuildMultipartContent(request);
         using var httpRequest = CreateRequest(
             HttpMethod.Post,
-            "/api/v1/sessions/attempts/evaluate",
+            "/api/v2/sessions/attempts/evaluate",
             content,
             requireServiceKey: true,
             correlationId);
@@ -105,7 +105,7 @@ public sealed class AiCoreClient : IAiCoreClient
                 HttpCompletionOption.ResponseHeadersRead,
                 timeoutCts.Token);
 
-            return await ReadResponseAsync<AiEvaluateAttemptResponse>(
+            return await ReadResponseAsync<AiEvaluateAttemptV2Response>(
                 response,
                 "EvaluateAttempt",
                 correlationId,
@@ -118,7 +118,7 @@ public sealed class AiCoreClient : IAiCoreClient
             ex is JsonException)
         {
             AiServiceErrorMapper.LogSafeFailure(_logger, null, "EvaluateAttempt", correlationId, ex);
-            return Result.Failure<AiEvaluateAttemptResponse>(
+            return Result.Failure<AiEvaluateAttemptV2Response>(
                 AiServiceErrorMapper.MapException(ex, correlationId));
         }
     }
@@ -140,6 +140,84 @@ public sealed class AiCoreClient : IAiCoreClient
             cancellationToken);
     }
 
+    public async Task<Result<AiSpeechAudioResult>> SynthesizeSpeechAsync(
+        string text,
+        string? purpose = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Result.Failure<AiSpeechAudioResult>(
+                AiServiceErrors.InvalidRequest(_correlationIdAccessor.GetOrCreate()));
+        }
+
+        var synthesizeRequest = new AiSynthesizeSpeechRequest
+        {
+            Text = text,
+            Purpose = purpose
+        };
+
+        Result<AiSynthesizeSpeechResponse> synthesizeResult = await SendAsync<AiSynthesizeSpeechResponse>(
+            HttpMethod.Post,
+            "/api/v1/speech/synthesize",
+            body: synthesizeRequest,
+            requireServiceKey: true,
+            operationName: "SynthesizeSpeech",
+            useHealthTimeout: false,
+            allowRetry: true,
+            cancellationToken);
+
+        if (synthesizeResult.IsFailure)
+        {
+            return Result.Failure<AiSpeechAudioResult>(synthesizeResult.Error);
+        }
+
+        string audioId = synthesizeResult.Value.AudioId;
+        string correlationId = _correlationIdAccessor.GetOrCreate();
+
+        using var httpRequest = CreateRequest(
+            HttpMethod.Get,
+            $"/api/v1/speech/audio/{Uri.EscapeDataString(audioId)}",
+            content: null,
+            requireServiceKey: true,
+            correlationId);
+
+        try
+        {
+            HttpResponseMessage response = await _httpClient.SendAsync(
+                httpRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                AiServiceErrorMapper.LogSafeFailure(_logger, response.StatusCode, "SynthesizeSpeech.Download", correlationId);
+                response.Dispose();
+                return Result.Failure<AiSpeechAudioResult>(
+                    AiServiceErrorMapper.MapHttpStatus(response.StatusCode, errorBody, null, correlationId));
+            }
+
+            Stream audioStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            string contentType = response.Content.Headers.ContentType?.MediaType ?? synthesizeResult.Value.ContentType;
+
+            return Result.Success(new AiSpeechAudioResult
+            {
+                Content = audioStream,
+                ContentType = string.IsNullOrWhiteSpace(contentType) ? "audio/mpeg" : contentType,
+                AudioId = audioId
+            });
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException ||
+            ((ex is TaskCanceledException or OperationCanceledException) &&
+             !cancellationToken.IsCancellationRequested))
+        {
+            AiServiceErrorMapper.LogSafeFailure(_logger, null, "SynthesizeSpeech.Download", correlationId, ex);
+            return Result.Failure<AiSpeechAudioResult>(AiServiceErrorMapper.MapException(ex, correlationId));
+        }
+    }
+
     private async Task<Result<T>> SendAsync<T>(
         HttpMethod method,
         string path,
@@ -151,6 +229,13 @@ public sealed class AiCoreClient : IAiCoreClient
         CancellationToken cancellationToken)
     {
         string correlationId = _correlationIdAccessor.GetOrCreate();
+
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl) ||
+            _httpClient.BaseAddress is null)
+        {
+            return Result.Failure<T>(AiServiceErrors.Unavailable(correlationId));
+        }
+
         int maxAttempts = allowRetry ? Math.Max(1, _options.MaxRetryAttempts + 1) : 1;
         byte[]? bodyBytes = body is null
             ? null
@@ -321,7 +406,7 @@ public sealed class AiCoreClient : IAiCoreClient
         return request;
     }
 
-    internal static MultipartFormDataContent BuildMultipartContent(AiEvaluateAttemptRequest request)
+    internal static MultipartFormDataContent BuildMultipartContent(AiEvaluateAttemptV2Request request)
     {
         var content = new MultipartFormDataContent();
 
@@ -332,10 +417,8 @@ public sealed class AiCoreClient : IAiCoreClient
                 : request.ContentType);
 
         content.Add(audioContent, "audio", request.FileName);
-        content.Add(new StringContent(request.ChildId, Encoding.UTF8), "childId");
-        content.Add(new StringContent(request.ActivityId, Encoding.UTF8), "activityId");
         content.Add(new StringContent(request.ActivityType, Encoding.UTF8), "activityType");
-        content.Add(new StringContent(request.TargetValue, Encoding.UTF8), "targetValue");
+        content.Add(new StringContent(request.Prompt, Encoding.UTF8), "prompt");
         content.Add(new StringContent(request.SpeechLevel, Encoding.UTF8), "speechLevel");
         content.Add(new StringContent(request.Age.ToString(), Encoding.UTF8), "age");
         content.Add(new StringContent(request.AttemptNumber.ToString(), Encoding.UTF8), "attemptNumber");
@@ -343,16 +426,6 @@ public sealed class AiCoreClient : IAiCoreClient
             new StringContent(request.ConsecutiveNoSpeechCount.ToString(), Encoding.UTF8),
             "consecutiveNoSpeechCount");
         content.Add(new StringContent(request.Language, Encoding.UTF8), "language");
-
-        if (!string.IsNullOrWhiteSpace(request.SessionId))
-        {
-            content.Add(new StringContent(request.SessionId, Encoding.UTF8), "sessionId");
-        }
-
-        if (request.SessionStepNumber is int stepNumber)
-        {
-            content.Add(new StringContent(stepNumber.ToString(), Encoding.UTF8), "sessionStepNumber");
-        }
 
         if (request.MaximumAttempts is int maxAttempts)
         {
@@ -370,11 +443,6 @@ public sealed class AiCoreClient : IAiCoreClient
         if (!string.IsNullOrWhiteSpace(request.PreviousDecision))
         {
             content.Add(new StringContent(request.PreviousDecision, Encoding.UTF8), "previousDecision");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.AdditionalContext))
-        {
-            content.Add(new StringContent(request.AdditionalContext, Encoding.UTF8), "additionalContext");
         }
 
         return content;

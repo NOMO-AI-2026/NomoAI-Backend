@@ -16,20 +16,32 @@ public sealed class AiServiceOptionsValidator : IValidateOptions<AiServiceOption
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(options.BaseUrl))
-        {
-            errors.Add("AiService:BaseUrl is required.");
-        }
-        else if (!Uri.TryCreate(options.BaseUrl.Trim(), UriKind.Absolute, out Uri? uri) ||
-                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            errors.Add("AiService:BaseUrl must be an absolute HTTP or HTTPS URL.");
-        }
+        bool hasBaseUrl = !string.IsNullOrWhiteSpace(options.BaseUrl);
+        bool hasServiceKey = !string.IsNullOrWhiteSpace(options.ServiceKey);
 
-        bool isTesting = _environment.IsEnvironment("Testing");
-        if (!isTesting && string.IsNullOrWhiteSpace(options.ServiceKey))
+        // Allow fully unconfigured AI so the host can start (Swagger/API still work).
+        // AI endpoints fail at call-time when BaseUrl/ServiceKey are missing.
+        if (!hasBaseUrl && !hasServiceKey)
         {
-            errors.Add("AiService:ServiceKey is required outside the Testing environment.");
+            // Still validate numeric bounds below.
+        }
+        else
+        {
+            if (!hasBaseUrl)
+            {
+                errors.Add("AiService:BaseUrl is required when AiService is partially configured.");
+            }
+            else if (!Uri.TryCreate(options.BaseUrl.Trim(), UriKind.Absolute, out Uri? uri) ||
+                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                errors.Add("AiService:BaseUrl must be an absolute HTTP or HTTPS URL.");
+            }
+
+            bool isTesting = _environment.IsEnvironment("Testing");
+            if (!isTesting && !hasServiceKey)
+            {
+                errors.Add("AiService:ServiceKey is required outside the Testing environment.");
+            }
         }
 
         if (options.TimeoutSeconds is < 5 or > 600)

@@ -169,6 +169,12 @@ public sealed class EvaluateAttemptCommandValidator : AbstractValidator<Evaluate
     }
 }
 
+/// <summary>
+/// Backward-compatible proxy handler. The public HTTP contract still accepts
+/// (and echoes back) childId/activityId/sessionId so existing React callers keep
+/// working, but the outbound AI Core call uses the V2 evaluate endpoint: no
+/// database IDs are sent, and TargetValue is forwarded as "prompt".
+/// </summary>
 public sealed class EvaluateAttemptCommandHandler
     : IRequestHandler<EvaluateAttemptCommand, Result<AiEvaluateAttemptResponse>>
 {
@@ -179,38 +185,88 @@ public sealed class EvaluateAttemptCommandHandler
         _aiCoreClient = aiCoreClient;
     }
 
-    public Task<Result<AiEvaluateAttemptResponse>> Handle(
+    public async Task<Result<AiEvaluateAttemptResponse>> Handle(
         EvaluateAttemptCommand request,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<double>? previousScores = ParsePreviousScores(request.PreviousAttemptScoresJson);
 
-        var aiRequest = new AiEvaluateAttemptRequest
+        var aiRequest = new AiEvaluateAttemptV2Request
         {
             AudioStream = request.AudioStream!,
             FileName = Path.GetFileName(request.FileName),
             ContentType = string.IsNullOrWhiteSpace(request.ContentType)
                 ? "application/octet-stream"
                 : request.ContentType.Split(';')[0].Trim(),
-            ChildId = request.ChildId,
-            ActivityId = request.ActivityId,
             ActivityType = request.ActivityType,
-            TargetValue = request.TargetValue,
+            Prompt = request.TargetValue,
             SpeechLevel = request.SpeechLevel,
             Age = request.Age,
             AttemptNumber = request.AttemptNumber,
-            SessionId = request.SessionId,
-            SessionStepNumber = request.SessionStepNumber,
             MaximumAttempts = request.MaximumAttempts,
             PreviousAttemptScores = previousScores,
             PreviousDecision = request.PreviousDecision,
             ConsecutiveNoSpeechCount = request.ConsecutiveNoSpeechCount,
-            Language = request.Language,
-            AdditionalContext = request.AdditionalContext
+            Language = request.Language
         };
 
-        return _aiCoreClient.EvaluateAttemptAsync(aiRequest, cancellationToken);
+        Result<AiEvaluateAttemptV2Response> result =
+            await _aiCoreClient.EvaluateAttemptAsync(aiRequest, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return Result.Failure<AiEvaluateAttemptResponse>(result.Error);
+        }
+
+        return Result.Success(ToLegacyResponse(request, result.Value));
     }
+
+    private static AiEvaluateAttemptResponse ToLegacyResponse(
+        EvaluateAttemptCommand request,
+        AiEvaluateAttemptV2Response v2) => new()
+    {
+        SessionId = request.SessionId,
+        ActivityId = request.ActivityId,
+        AttemptNumber = v2.AttemptNumber,
+        ActivityType = v2.ActivityType,
+        TargetValue = v2.Prompt,
+        SpeechOutcome = v2.SpeechOutcome,
+        SpeechAnalysis = ToLegacySpeechAnalysis(v2.SpeechAnalysis),
+        AdaptiveDecision = v2.AdaptiveDecision,
+        KnowledgeSourceIds = v2.KnowledgeSourceIds,
+        Avatar = v2.Avatar,
+        AvatarModel = v2.AvatarModel,
+        AvatarGenerationMode = v2.AvatarGenerationMode,
+        UsedFallback = v2.UsedFallback,
+        GeneratedAt = v2.GeneratedAt
+    };
+
+    private static AiSpeechAnalysisResultDto? ToLegacySpeechAnalysis(AiSpeechAnalysisV2Dto? v2) =>
+        v2 is null
+            ? null
+            : new AiSpeechAnalysisResultDto
+            {
+                ActivityType = v2.ActivityType,
+                TargetValue = v2.Prompt,
+                Audio = v2.Audio,
+                Vad = v2.Vad,
+                Transcription = v2.Transcription,
+                Normalization = v2.Normalization,
+                Scores = v2.Scores is null
+                    ? null
+                    : new AiScoreBreakdownDto
+                    {
+                        AccuracyScore = v2.Scores.AccuracyScore ?? 0,
+                        CompletenessScore = v2.Scores.CompletenessScore,
+                        FluencyScore = v2.Scores.FluencyScore,
+                        PronunciationProxyScore = v2.Scores.PronunciationProxyScore ?? 0,
+                        OverallScore = v2.Scores.OverallScore,
+                        Matched = v2.Scores.Matched,
+                        ReasonCodes = v2.Scores.ReasonCodes,
+                        ScoringMethod = v2.Scores.ScoringMethod,
+                        RulesVersion = v2.Scores.RulesVersion
+                    }
+            };
 
     private static IReadOnlyList<double>? ParsePreviousScores(string? raw)
     {

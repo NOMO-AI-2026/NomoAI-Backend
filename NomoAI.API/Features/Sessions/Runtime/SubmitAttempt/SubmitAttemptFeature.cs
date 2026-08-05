@@ -1,0 +1,453 @@
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Ai;
+using NomoAI.API.Common.Ai.Contracts;
+using NomoAI.API.Domain.Entities;
+using NomoAI.API.Domain.Enums;
+using NomoAI.API.Features.Sessions.Runtime.StartSession;
+using NomoAI.API.Infrastructure.Ai;
+using NomoAI.API.Persistence;
+using NomoDoc.Domain.Entities;
+using System.Security.Claims;
+using System.Text.Json;
+
+namespace NomoAI.API.Features.Sessions.Runtime.SubmitAttempt;
+
+/// <summary>
+/// MediatR command uses Stream metadata instead of IFormFile to keep the handler
+/// transport-agnostic. The endpoint owns opening/disposing the audio stream around Send.
+/// </summary>
+public sealed record SubmitAttemptCommand(
+    int SessionId,
+    Stream? AudioStream,
+    string FileName,
+    string ContentType,
+    long AudioLengthBytes,
+    string UserId) : IRequest<Result<SessionRuntimeResponse>>;
+
+public sealed class SubmitAttemptCommandValidator : AbstractValidator<SubmitAttemptCommand>
+{
+    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/mp4",
+        "audio/x-m4a",
+        "audio/m4a",
+        "audio/webm",
+        "audio/ogg",
+        "application/ogg",
+        "application/octet-stream"
+    };
+
+    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".wav", ".mp3", ".m4a", ".webm", ".ogg"
+    };
+
+    public SubmitAttemptCommandValidator(IOptions<AiServiceOptions> options)
+    {
+        long maxBytes = options.Value.MaxAudioBytes;
+
+        RuleFor(x => x.SessionId).GreaterThan(0);
+        RuleFor(x => x.UserId).NotEmpty();
+
+        RuleFor(x => x.AudioStream)
+            .NotNull()
+            .WithMessage("Audio file is required.");
+
+        RuleFor(x => x.AudioLengthBytes)
+            .GreaterThan(0)
+            .WithMessage("Audio file must not be empty.")
+            .LessThanOrEqualTo(maxBytes)
+            .WithMessage($"Audio file must not exceed {maxBytes} bytes.");
+
+        RuleFor(x => x.ContentType)
+            .Must(BeAllowedContentType)
+            .WithMessage("Audio content type is not supported.");
+
+        RuleFor(x => x.FileName)
+            .NotEmpty()
+            .Must(HaveAllowedExtension)
+            .WithMessage("Audio file extension is not supported.");
+    }
+
+    private static bool BeAllowedContentType(string? contentType)
+    {
+        string normalized = (contentType ?? string.Empty).Split(';')[0].Trim();
+        return string.IsNullOrWhiteSpace(normalized) || AllowedContentTypes.Contains(normalized);
+    }
+
+    private static bool HaveAllowedExtension(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        return AllowedExtensions.Contains(Path.GetExtension(fileName));
+    }
+}
+
+internal sealed class SubmitAttemptCommandHandler
+    : IRequestHandler<SubmitAttemptCommand, Result<SessionRuntimeResponse>>
+{
+    private const string NoSpeechOutcome = "no_speech";
+
+    private readonly AppDbContext _db;
+    private readonly IAiCoreClient _aiCoreClient;
+
+    public SubmitAttemptCommandHandler(AppDbContext db, IAiCoreClient aiCoreClient)
+    {
+        _db = db;
+        _aiCoreClient = aiCoreClient;
+    }
+
+    public async Task<Result<SessionRuntimeResponse>> Handle(
+        SubmitAttemptCommand request,
+        CancellationToken cancellationToken)
+    {
+        (ChildOwnershipStatus ownership, Session? session) = await SessionOwnership.CheckSessionOwnershipAsync(
+            _db, request.UserId, request.SessionId, cancellationToken);
+
+        if (ownership == ChildOwnershipStatus.ChildNotFound || session is null)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.SessionNotFound);
+        }
+
+        if (ownership == ChildOwnershipStatus.Forbidden)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.Forbidden);
+        }
+
+        if (session.Status != SessionStatus.InProgress)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.SessionNotInProgress);
+        }
+
+        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
+        if (plan is null)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.PlanUnavailable);
+        }
+
+        AiSessionStepDto? step = SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
+        if (step is null)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.StepNotFound);
+        }
+
+        if (session.CurrentAttemptNumber >= step.MaximumAttempts)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.MaximumAttemptsExceeded);
+        }
+
+        int globalAttemptNumber = await _db.SessionAttempts
+            .CountAsync(a => a.SessionId == session.Id && !a.IsDeleted, cancellationToken) + 1;
+
+        bool alreadyRecorded = await _db.SessionAttempts
+            .AnyAsync(
+                a => a.SessionId == session.Id && a.AttemptNumber == globalAttemptNumber && !a.IsDeleted,
+                cancellationToken);
+
+        if (alreadyRecorded)
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.DuplicateAttempt);
+        }
+
+        (IReadOnlyList<double> previousScores, string? previousDecision, int consecutiveNoSpeechCount) =
+            await LoadAttemptHistoryAsync(session, cancellationToken);
+
+        int stepAttemptNumber = session.CurrentAttemptNumber + 1;
+        int age = session.ChildAge ?? 6;
+
+        var aiRequest = new AiEvaluateAttemptV2Request
+        {
+            AudioStream = request.AudioStream!,
+            FileName = Path.GetFileName(request.FileName),
+            ContentType = string.IsNullOrWhiteSpace(request.ContentType)
+                ? "application/octet-stream"
+                : request.ContentType.Split(';')[0].Trim(),
+            ActivityType = session.ActivityType ?? plan.ActivityType,
+            Prompt = session.Prompt ?? plan.Prompt,
+            SpeechLevel = session.SpeechLevel ?? string.Empty,
+            Age = age,
+            AttemptNumber = stepAttemptNumber,
+            MaximumAttempts = step.MaximumAttempts,
+            PreviousAttemptScores = previousScores.Count == 0 ? null : previousScores,
+            PreviousDecision = previousDecision,
+            ConsecutiveNoSpeechCount = consecutiveNoSpeechCount,
+            Language = session.Language
+        };
+
+        Result<AiEvaluateAttemptV2Response> evaluateResult =
+            await _aiCoreClient.EvaluateAttemptAsync(aiRequest, cancellationToken);
+
+        if (evaluateResult.IsFailure)
+        {
+            return Result.Failure<SessionRuntimeResponse>(evaluateResult.Error);
+        }
+
+        AiEvaluateAttemptV2Response evaluation = evaluateResult.Value;
+
+        var attempt = new SessionAttempts
+        {
+            SessionId = session.Id,
+            AttemptNumber = globalAttemptNumber,
+            AudioUrl = null
+        };
+
+        _db.SessionAttempts.Add(attempt);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _db.AttemptTranscribtions.Add(new AttemptTranscribtion
+        {
+            AttemptId = attempt.Id,
+            TranscribedText = evaluation.SpeechAnalysis?.Transcription?.Text ?? string.Empty,
+            DetectedLanguage = evaluation.SpeechAnalysis?.Transcription?.Language ?? session.Language,
+            NormalizedText = evaluation.SpeechAnalysis?.Normalization?.NormalizedText
+        });
+
+        AiEvaluateScoreDto? scores = evaluation.Scores;
+        AiSpeechAnalysisScoreDto? analysisScores = evaluation.SpeechAnalysis?.Scores;
+
+        _db.AttemptEvaluations.Add(new AttemptEvaluation
+        {
+            AttemptId = attempt.Id,
+            AccuracyScore = (decimal)(scores?.Accuracy ?? analysisScores?.AccuracyScore ?? 0),
+            FluencyScore = (decimal)(scores?.Fluency ?? analysisScores?.FluencyScore ?? 0),
+            PronunciationScore = (decimal)(scores?.Pronunciation ?? analysisScores?.PronunciationProxyScore ?? 0),
+            CompletenessScore = (decimal)(scores?.Completeness ?? analysisScores?.CompletenessScore ?? 0),
+            Feedback = evaluation.Avatar.SpokenText,
+            IsSuccessful = scores?.Matched ?? analysisScores?.Matched ?? false,
+            AdaptiveAction = evaluation.AdaptiveDecision.Action,
+            AvatarSpokenText = evaluation.Avatar.SpokenText,
+            AvatarEmotion = evaluation.Avatar.Emotion,
+            SpeechOutcome = evaluation.SpeechOutcome,
+            Matched = scores?.Matched ?? analysisScores?.Matched,
+            NormalizedTranscript = evaluation.SpeechAnalysis?.Normalization?.NormalizedText,
+            EvaluationJson = JsonSerializer.Serialize(evaluation, AiCoreJsonSerializerOptions.Instance),
+            KnowledgeSourceIdsJson = JsonSerializer.Serialize(evaluation.KnowledgeSourceIds),
+            KnowledgeChunkIdsJson = JsonSerializer.Serialize(evaluation.KnowledgeChunkIds)
+        });
+
+        ApplyAdaptiveTransition(session, plan, evaluation.AdaptiveDecision.Action);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var feedback = new SessionFeedbackDto
+        {
+            AttemptId = attempt.Id,
+            AdaptiveAction = evaluation.AdaptiveDecision.Action,
+            SpokenText = evaluation.Avatar.SpokenText,
+            Emotion = evaluation.Avatar.Emotion,
+            Scores = new SessionFeedbackScoreDto
+            {
+                Accuracy = scores?.Accuracy,
+                Pronunciation = scores?.Pronunciation,
+                Fluency = scores?.Fluency ?? analysisScores?.FluencyScore,
+                Completeness = scores?.Completeness ?? analysisScores?.CompletenessScore,
+                Relevance = scores?.Relevance,
+                Overall = scores?.Overall ?? analysisScores?.OverallScore ?? 0,
+                Matched = scores?.Matched ?? analysisScores?.Matched ?? false
+            }
+        };
+
+        SessionRuntimeResponse response = BuildResponse(session, plan, evaluation.AdaptiveDecision.Action, feedback);
+        return Result.Success(response);
+    }
+
+    private async Task<(IReadOnlyList<double> PreviousScores, string? PreviousDecision, int ConsecutiveNoSpeechCount)>
+        LoadAttemptHistoryAsync(Session session, CancellationToken cancellationToken)
+    {
+        if (session.CurrentAttemptNumber <= 0)
+        {
+            return (Array.Empty<double>(), null, 0);
+        }
+
+        // Attempts made on the current step are exactly the last CurrentAttemptNumber
+        // rows recorded for this session (CurrentAttemptNumber resets to 0 on advance).
+        List<(int AttemptNumber, string? AdaptiveAction, string? SpeechOutcome, string? EvaluationJson)> recent =
+            await _db.SessionAttempts
+                .Where(a => a.SessionId == session.Id && !a.IsDeleted)
+                .OrderByDescending(a => a.AttemptNumber)
+                .Take(session.CurrentAttemptNumber)
+                .Join(
+                    _db.AttemptEvaluations.Where(e => !e.IsDeleted),
+                    a => a.Id,
+                    e => e.AttemptId,
+                    (a, e) => new { a.AttemptNumber, e.AdaptiveAction, e.SpeechOutcome, e.EvaluationJson })
+                .Select(x => new ValueTuple<int, string?, string?, string?>(
+                    x.AttemptNumber, x.AdaptiveAction, x.SpeechOutcome, x.EvaluationJson))
+                .ToListAsync(cancellationToken);
+
+        // recent is newest-first; reverse for chronological (oldest-first) score history.
+        recent.Reverse();
+
+        var scores = new List<double>(recent.Count);
+        foreach (var row in recent)
+        {
+            AiEvaluateAttemptV2Response? snapshot = string.IsNullOrWhiteSpace(row.EvaluationJson)
+                ? null
+                : JsonSerializer.Deserialize<AiEvaluateAttemptV2Response>(
+                    row.EvaluationJson, AiCoreJsonSerializerOptions.Instance);
+
+            double? overall = snapshot?.Scores?.Overall ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore;
+            if (overall is not null)
+            {
+                scores.Add(overall.Value);
+            }
+        }
+
+        string? previousDecision = recent.Count == 0 ? null : recent[^1].AdaptiveAction;
+
+        int consecutiveNoSpeechCount = 0;
+        for (int i = recent.Count - 1; i >= 0; i--)
+        {
+            if (string.Equals(recent[i].SpeechOutcome, NoSpeechOutcome, StringComparison.OrdinalIgnoreCase))
+            {
+                consecutiveNoSpeechCount++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return (scores, previousDecision, consecutiveNoSpeechCount);
+    }
+
+    internal static void ApplyAdaptiveTransition(Session session, AiSessionPlanV2Response plan, string action)
+    {
+        switch (action)
+        {
+            case AdaptiveActions.Advance:
+                int nextStepNumber = session.CurrentStepNumber + 1;
+                session.CurrentAttemptNumber = 0;
+
+                if (SessionPlanSnapshot.GetStep(plan, nextStepNumber) is null)
+                {
+                    session.Status = SessionStatus.Completed;
+                    session.EndedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    session.CurrentStepNumber = nextStepNumber;
+                }
+
+                break;
+
+            case AdaptiveActions.End:
+            case AdaptiveActions.EndAttempts:
+                session.Status = SessionStatus.Completed;
+                session.EndedAt = DateTime.UtcNow;
+                break;
+
+            case AdaptiveActions.RecommendDoctorReview:
+                session.RequiresDoctorReview = true;
+                session.Status = SessionStatus.Completed;
+                session.EndedAt = DateTime.UtcNow;
+                break;
+
+            case AdaptiveActions.RetrySame:
+            case AdaptiveActions.RetryWithHint:
+            case AdaptiveActions.Simplify:
+            case AdaptiveActions.AskFollowUp:
+            case AdaptiveActions.ContinueConversation:
+            case AdaptiveActions.TakeShortBreak:
+            default:
+                session.CurrentAttemptNumber++;
+                break;
+        }
+    }
+
+    internal static SessionRuntimeResponse BuildResponse(
+        Session session,
+        AiSessionPlanV2Response plan,
+        string adaptiveAction,
+        SessionFeedbackDto feedback)
+    {
+        string status = SessionRuntimeStatus.Map(session.Status);
+        AiSessionStepDto? currentStep = SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
+
+        string command = session.Status != SessionStatus.InProgress
+            ? SessionRuntimeCommand.SessionCompleted
+            : adaptiveAction == AdaptiveActions.TakeShortBreak
+                ? SessionRuntimeCommand.TakeBreak
+                : SessionRuntimeCommand.PlayFeedback;
+
+        return new SessionRuntimeResponse
+        {
+            SessionId = session.Id,
+            Status = status,
+            CurrentStep = currentStep is null
+                ? null
+                : StartSessionCommandHandler.MapStep(currentStep, session.CurrentAttemptNumber),
+            Command = command,
+            Feedback = feedback,
+            ActivityType = session.ActivityType,
+            Prompt = session.Prompt
+        };
+    }
+}
+
+public static class SubmitAttemptEndpoint
+{
+    public static void MapEndpoint(RouteGroupBuilder group)
+    {
+        group
+            .MapPost("/{sessionId:int}/attempts", HandleAsync)
+            .RequireAuthorization(policy => policy.RequireRole("Doctor", "Parent"))
+            // Bearer JWT APIs do not use cookie antiforgery. Disable only on this
+            // multipart Minimal API endpoint (not globally).
+            .DisableAntiforgery()
+            .WithName("SubmitSessionAttempt")
+            .WithSummary("Submit a recorded attempt for evaluation and advance the session")
+            .Produces<SessionRuntimeResponse>(StatusCodes.Status200OK)
+            .Produces<Error>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces<Error>(StatusCodes.Status403Forbidden)
+            .Produces<Error>(StatusCodes.Status404NotFound)
+            .Produces<Error>(StatusCodes.Status409Conflict)
+            .Produces<Error>(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    private static async Task<IResult> HandleAsync(
+        int sessionId,
+        IFormFile? audio,
+        ClaimsPrincipal currentUser,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        string? userId = currentUser.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        string fileName = audio is null ? string.Empty : Path.GetFileName(audio.FileName);
+        string contentType = audio is null
+            ? string.Empty
+            : (audio.ContentType ?? "application/octet-stream").Split(';')[0].Trim();
+        long length = audio?.Length ?? 0;
+
+        // Endpoint owns the stream lifetime for the duration of the MediatR call.
+        await using Stream? audioStream = audio?.OpenReadStream();
+
+        var command = new SubmitAttemptCommand(sessionId, audioStream, fileName, contentType, length, userId);
+
+        Result<SessionRuntimeResponse> result = await sender.Send(command, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return Results.Json(result.Error, statusCode: result.Error.StatusCode);
+        }
+
+        return Results.Ok(result.Value);
+    }
+}

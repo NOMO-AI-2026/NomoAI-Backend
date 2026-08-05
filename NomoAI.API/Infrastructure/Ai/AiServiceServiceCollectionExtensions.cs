@@ -12,8 +12,8 @@ public static class AiServiceServiceCollectionExtensions
     {
         services
             .AddOptions<AiServiceOptions>()
-            .Bind(configuration.GetSection(AiServiceOptions.SectionName))
-            .ValidateOnStart();
+            .Bind(configuration.GetSection(AiServiceOptions.SectionName));
+        // Intentionally no ValidateOnStart: missing AI config must not kill the whole host on EB/Monster.
 
         services.AddSingleton<IValidateOptions<AiServiceOptions>, AiServiceOptionsValidator>();
 
@@ -23,7 +23,11 @@ public static class AiServiceServiceCollectionExtensions
         services.AddHttpClient<IAiCoreClient, AiCoreClient>((sp, client) =>
             {
                 AiServiceOptions options = sp.GetRequiredService<IOptions<AiServiceOptions>>().Value;
-                client.BaseAddress = AiServiceBaseUrlNormalizer.CreateBaseAddress(options.BaseUrl);
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = AiServiceBaseUrlNormalizer.CreateBaseAddress(options.BaseUrl);
+                }
+
                 // Per-request timeouts are enforced via CancellationTokenSource in AiCoreClient.
                 // TLS certificate validation remains enabled (default HttpClient handler).
                 client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;

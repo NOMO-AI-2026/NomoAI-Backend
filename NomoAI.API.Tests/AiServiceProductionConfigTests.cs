@@ -126,15 +126,14 @@ public class AiServiceProductionConfigTests
         var (client, handler, _) = CreateClient(options);
         handler.Handler = (request, _) =>
         {
-            Assert.Equal("http://191.218.161.183/api/v1/sessions/plan", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://191.218.161.183/api/v2/sessions/plan", request.RequestUri!.AbsoluteUri);
             Assert.Equal(
                 "vps-service-key",
                 request.Headers.GetValues(AiServiceOptions.ServiceKeyHeaderName).Single());
             return Task.FromResult(JsonOk("""
                 {
-                  "activityId":"a1",
                   "activityType":"word",
-                  "targetValue":"x",
+                  "prompt":"x",
                   "title":"t",
                   "objective":"o",
                   "estimatedDurationMinutes":10,
@@ -151,12 +150,10 @@ public class AiServiceProductionConfigTests
                 """));
         };
 
-        var result = await client.PlanSessionAsync(new AiSessionPlanRequest
+        var result = await client.PlanSessionAsync(new AiSessionPlanV2Request
         {
-            ChildId = "c1",
-            ActivityId = "a1",
             ActivityType = "word",
-            TargetValue = "x",
+            Prompt = "x",
             SpeechLevel = "level",
             Age = 8
         });
@@ -265,16 +262,15 @@ public class AiServiceProductionConfigTests
         handler.Handler = async (request, _) =>
         {
             Assert.Equal(
-                "http://191.218.161.183/api/v1/sessions/attempts/evaluate",
+                "http://191.218.161.183/api/v2/sessions/attempts/evaluate",
                 request.RequestUri!.AbsoluteUri);
             Assert.IsType<MultipartFormDataContent>(request.Content);
             await Task.CompletedTask;
             return JsonOk("""
                 {
-                  "activityId":"a1",
                   "attemptNumber":1,
                   "activityType":"word",
-                  "targetValue":"x",
+                  "prompt":"x",
                   "speechOutcome":"no_speech",
                   "adaptiveDecision":{
                     "action":"retry_same",
@@ -305,15 +301,13 @@ public class AiServiceProductionConfigTests
         };
 
         await using var audio = new MemoryStream(Encoding.UTF8.GetBytes("RIFF....WAVE"));
-        var result = await client.EvaluateAttemptAsync(new AiEvaluateAttemptRequest
+        var result = await client.EvaluateAttemptAsync(new AiEvaluateAttemptV2Request
         {
             AudioStream = audio,
             FileName = "sample.wav",
             ContentType = "audio/wav",
-            ChildId = "c1",
-            ActivityId = "a1",
             ActivityType = "word",
-            TargetValue = "x",
+            Prompt = "x",
             SpeechLevel = "level",
             Age = 8,
             AttemptNumber = 1

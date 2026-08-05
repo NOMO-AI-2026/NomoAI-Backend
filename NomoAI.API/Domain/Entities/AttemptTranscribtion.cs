@@ -15,6 +15,8 @@ namespace NomoAI.API.Domain.Entities
 
         public string DetectedLanguage { get; set; } = string.Empty;
 
+        public string? NormalizedText { get; set; }
+
         public SessionAttempts Attempt { get; set; } = null!;
     }
 }

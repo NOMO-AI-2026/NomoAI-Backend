@@ -39,15 +39,13 @@ public class MultipartContentTests
     public async Task BuildMultipartContent_Includes_Previous_Scores_Json()
     {
         await using var stream = new MemoryStream([1, 2, 3]);
-        using var content = AiCoreClient.BuildMultipartContent(new AiEvaluateAttemptRequest
+        using var content = AiCoreClient.BuildMultipartContent(new AiEvaluateAttemptV2Request
         {
             AudioStream = stream,
             FileName = "a.wav",
             ContentType = "audio/wav",
-            ChildId = "c1",
-            ActivityId = "a1",
             ActivityType = "word",
-            TargetValue = "t",
+            Prompt = "t",
             SpeechLevel = "level",
             Age = 6,
             AttemptNumber = 2,
@@ -60,5 +58,34 @@ public class MultipartContentTests
         string scores = await scoresPart.ReadAsStringAsync();
         double[]? parsed = JsonSerializer.Deserialize<double[]>(scores);
         Assert.Equal([40.5, 55], parsed);
+    }
+
+    [Fact]
+    public async Task BuildMultipartContent_Does_Not_Include_Database_Ids()
+    {
+        await using var stream = new MemoryStream([1, 2, 3]);
+        using var content = AiCoreClient.BuildMultipartContent(new AiEvaluateAttemptV2Request
+        {
+            AudioStream = stream,
+            FileName = "a.wav",
+            ContentType = "audio/wav",
+            ActivityType = "word",
+            Prompt = "بابا",
+            SpeechLevel = "level",
+            Age = 6,
+            AttemptNumber = 1
+        });
+
+        var fieldNames = content
+            .Select(c => c.Headers.ContentDisposition?.Name?.Trim('"'))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("childId", fieldNames);
+        Assert.DoesNotContain("activityId", fieldNames);
+        Assert.DoesNotContain("sessionId", fieldNames);
+        Assert.DoesNotContain("targetValue", fieldNames);
+        Assert.Contains("prompt", fieldNames);
+        Assert.Contains("activityType", fieldNames);
     }
 }

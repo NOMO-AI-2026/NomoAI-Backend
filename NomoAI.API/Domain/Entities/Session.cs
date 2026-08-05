@@ -37,5 +37,36 @@ namespace NomoAI.API.Domain.Entities
         public Children Child { get; set; } = null!;
 
         public Activity Activity { get; set; } = null!;
+
+        /// <summary>Full AiSessionPlanV2Response snapshot captured at StartSession time.</summary>
+        public string? PlanJson { get; set; }
+
+        public int CurrentStepNumber { get; set; } = 1;
+
+        public int CurrentAttemptNumber { get; set; }
+
+        public string? PlanModel { get; set; }
+
+        public bool PlanUsedFallback { get; set; }
+
+        public DateTimeOffset? PlanGeneratedAt { get; set; }
+
+        public string? KnowledgeSourceIdsJson { get; set; }
+
+        public string? KnowledgeChunkIdsJson { get; set; }
+
+        public bool RequiresDoctorReview { get; set; }
+
+        /// <summary>Denormalized AI activity type, e.g. "word".</summary>
+        public string? ActivityType { get; set; }
+
+        /// <summary>Denormalized therapy target/prompt sent to AI Core.</summary>
+        public string? Prompt { get; set; }
+
+        public string? SpeechLevel { get; set; }
+
+        public string Language { get; set; } = "ar";
+
+        public int? ChildAge { get; set; }
     }
 }

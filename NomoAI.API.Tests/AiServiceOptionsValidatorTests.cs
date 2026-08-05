@@ -67,6 +67,26 @@ public class AiServiceOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public void Validate_Allows_Fully_Unconfigured_AiService()
+    {
+        var validator = new AiServiceOptionsValidator(new TestHostEnvironment
+        {
+            EnvironmentName = Environments.Production
+        });
+
+        var result = validator.Validate(null, new AiServiceOptions
+        {
+            BaseUrl = "",
+            ServiceKey = "",
+            TimeoutSeconds = 180,
+            HealthTimeoutSeconds = 10,
+            MaxRetryAttempts = 2
+        });
+
+        Assert.True(result.Succeeded);
+    }
+
     [Theory]
     [InlineData("not-a-url")]
     [InlineData("ftp://localhost:8000")]

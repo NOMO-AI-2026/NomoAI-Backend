@@ -372,3 +372,8 @@ scripts/vps-*.json
 scripts/aspnet-*.json
 scripts/ai-demo-*.json
 scripts/plan-*.json
+
+# Elastic Beanstalk local publish artifacts
+publish-eb/
+nomoai-api-eb.zip
+nomoai-api-eb-*.zip

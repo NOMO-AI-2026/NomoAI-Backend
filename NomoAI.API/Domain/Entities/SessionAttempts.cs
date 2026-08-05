@@ -15,7 +15,10 @@ namespace NomoAI.API.Domain.Entities
 
         public  int AttemptNumber { get; set; }
 
-        public string AudioUrl { get; set; }
+        /// <summary>Nullable: audio may not be persisted to storage for every attempt.</summary>
+        public string? AudioUrl { get; set; }
+
+        public Session Session { get; set; } = null!;
 
 
     }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NomoAI.API.Persistence;
 
@@ -11,9 +12,11 @@ using NomoAI.API.Persistence;
 namespace NomoAI.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260805163228_AddSessionRuntimePersistence")]
+    partial class AddSessionRuntimePersistence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -484,18 +487,6 @@ namespace NomoAI.API.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsDoctorReviewed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<int?>("DoctorRating")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DoctorComment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
                     b.Property<string>("KnowledgeChunkIdsJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -545,8 +536,6 @@ namespace NomoAI.API.Migrations
                     b.HasIndex("ActivityId");
 
                     b.HasIndex("ChildId");
-
-                    b.HasIndex("Status", "IsDoctorReviewed", "IsDeleted");
 
                     b.ToTable("Sessions");
                 });
@@ -608,58 +597,6 @@ namespace NomoAI.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SpeechLevels");
-                });
-
-            modelBuilder.Entity("NomoAI.API.Domain.Entities.SupportTicket", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AdminNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("HandledAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("HandledByAdminUserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.AttemptEvaluation", b =>
@@ -1012,17 +949,6 @@ namespace NomoAI.API.Migrations
                     b.Navigation("Activity");
 
                     b.Navigation("Child");
-                });
-
-            modelBuilder.Entity("NomoAI.API.Domain.Entities.SupportTicket", b =>
-                {
-                    b.HasOne("NomoAI.API.Domain.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.SessionAttempts", b =>

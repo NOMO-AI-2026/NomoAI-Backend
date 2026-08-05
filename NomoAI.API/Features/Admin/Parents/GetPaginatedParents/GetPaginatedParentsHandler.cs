@@ -24,7 +24,16 @@ internal sealed class GetPaginatedParentsHandler
         CancellationToken cancellationToken)
     {
         IQueryable<Parent> query =
-            BuildParentsQuery();
+            _dbContext.Parents
+            .AsNoTracking()
+            .Where(parent =>
+                !parent.User.IsDeleted && !parent.IsDeleted);
+
+        if(request.Name is not null)
+        {
+            query = query.Where(parent =>
+                parent.User.Fullname.Contains(request.Name));
+        }
 
         int totalCount =
             await query.CountAsync(cancellationToken);
@@ -51,7 +60,9 @@ internal sealed class GetPaginatedParentsHandler
         return _dbContext.Parents
             .AsNoTracking()
             .Where(parent =>
-                !parent.User.IsDeleted && !parent.IsDeleted);
+                !parent.User.IsDeleted && !parent.IsDeleted );
+
+
     }
 
     private static async Task<List<ParentListItemResponse>>

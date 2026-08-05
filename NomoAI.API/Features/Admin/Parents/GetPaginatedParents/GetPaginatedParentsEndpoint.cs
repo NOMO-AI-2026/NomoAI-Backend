@@ -35,7 +35,9 @@ public static class GetPaginatedParentsEndpoint
     {
         var query = new GetPaginatedParentsQuery(
             request.PageNumber ?? 1,
-            request.PageSize ?? 10);
+            request.PageSize ?? 10, 
+            request.Name);
+
 
         Result<GetPaginatedParentsResponse> result =
             await sender.Send(

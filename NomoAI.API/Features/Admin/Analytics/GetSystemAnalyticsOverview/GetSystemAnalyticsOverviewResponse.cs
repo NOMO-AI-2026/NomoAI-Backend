@@ -55,7 +55,7 @@ public sealed record SupportAnalyticsResponse(
     int LockedForUser);
 
 public sealed record SupportTicketsByStatusResponse(
-    int Open,
+    int Unread,
     int InProgress,
     int Resolved,
     int Closed);

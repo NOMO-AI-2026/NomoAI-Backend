@@ -27,7 +27,7 @@ internal sealed class GetMySupportTicketsHandler
             _dbContext.SupportTickets
                 .AsNoTracking()
                 .Where(ticket =>
-                    ticket.UserId == request.UserId &&
+                    ticket.UserId == request.UserId && 
                     !ticket.IsDeleted);
 
         int totalCount =

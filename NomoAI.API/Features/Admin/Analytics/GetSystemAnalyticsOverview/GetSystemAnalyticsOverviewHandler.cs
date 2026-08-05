@@ -219,7 +219,7 @@ internal sealed class GetSystemAnalyticsOverviewHandler
             Support: new SupportAnalyticsResponse(
                 TicketsTotal: supportTicketsTotal,
                 ByStatus: new SupportTicketsByStatusResponse(
-                    Open: supportStats?.Open ?? 0,
+                    Unread: supportStats?.Open ?? 0,
                     InProgress: supportStats?.InProgress ?? 0,
                     Resolved: supportStats?.Resolved ?? 0,
                     Closed: supportStats?.Closed ?? 0),

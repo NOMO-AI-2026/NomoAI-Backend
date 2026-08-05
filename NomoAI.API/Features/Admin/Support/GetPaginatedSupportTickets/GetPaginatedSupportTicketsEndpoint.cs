@@ -34,7 +34,8 @@ public class GetPaginatedSupportTicketsEndpoint : IEndpoint
         var query = new GetPaginatedSupportTicketsQuery(
             request.PageNumber ?? 1,
             request.PageSize ?? 10,
-            request.Status);
+            request.Status,
+            request.Name);
 
         Result<GetPaginatedSupportTicketsResponse> result =
             await sender.Send(query, cancellationToken);

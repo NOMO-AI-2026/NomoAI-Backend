@@ -7,5 +7,6 @@ namespace NomoAI.API.Features.Admin.Support.GetPaginatedSupportTickets;
 public sealed record GetPaginatedSupportTicketsQuery(
     int PageNumber,
     int PageSize,
-    SupportTicketStatus? Status)
+    SupportTicketStatus? Status,
+    string? Name)
     : IRequest<Result<GetPaginatedSupportTicketsResponse>>;

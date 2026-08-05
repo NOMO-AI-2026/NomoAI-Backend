@@ -6,5 +6,7 @@ namespace NomoAI.API.Features.Child
     {
         public static Error SpeechLevelNotFound = new Error("Children.SpeechLevelNotFound", "Speech level not found.", 404);
         public static Error DoctorNotFound = new Error("Children.DoctorNotFound", "Doctor not found.", 404);
+        public static Error ParentNotFound = new Error("Children.ParentNotFound", "Parent not found.", 404);
+        public static Error AccessDenied = new Error("Children.AccessDenied", "Access denied.", 403);
     }
 }

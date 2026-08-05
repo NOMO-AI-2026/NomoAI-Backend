@@ -17,7 +17,8 @@ namespace NomoAI.API.Features.AdminDashboard.GetAllDoctors
         {
             var query = _db.Doctor
                 .AsNoTracking()
-                .Where(d => !d.IsDeleted && (request.IsApproved == null || d.IsApproved == request.IsApproved))
+                .Where(d => !d.IsDeleted && (request.IsApproved == null || d.IsApproved == request.IsApproved) && 
+                 (request.Name == null || d.User.Fullname.Contains(request.Name)))
                 .Select(d => new DoctorResponse
                 {
                     UserId = d.UserId,

@@ -5,5 +5,6 @@ namespace NomoAI.API.Features.Admin.Parents.GetPaginatedParents;
 
 public sealed record GetPaginatedParentsQuery(
     int PageNumber,
-    int PageSize)
+    int PageSize,
+    string? Name)
     : IRequest<Result<GetPaginatedParentsResponse>>;

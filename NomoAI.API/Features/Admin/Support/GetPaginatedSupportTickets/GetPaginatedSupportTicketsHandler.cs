@@ -32,7 +32,11 @@ internal sealed class GetPaginatedSupportTicketsHandler
             query = query.Where(ticket =>
                 ticket.Status == request.Status.Value);
         }
-
+        if(request.Name != null)
+        {
+            query = query.Where(ticket =>
+               ticket.User.Fullname.Contains(request.Name));
+        }
         int totalCount =
             await query.CountAsync(cancellationToken);
 

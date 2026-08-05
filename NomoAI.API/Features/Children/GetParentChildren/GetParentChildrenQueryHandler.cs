@@ -33,7 +33,8 @@ namespace NomoAI.API.Features.Children.GetParentChildren
                     Id = c.Id,
                     FullName = c.FullName,
                     Gender = c.Gender,
-                    Age = c.Age
+                    Age = c.Age,
+                    DoctorName =  c.Doctor.User.Fullname 
                 })
                 .ToListAsync(cancellationToken);
 

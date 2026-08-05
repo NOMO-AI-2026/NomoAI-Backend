@@ -9,9 +9,9 @@ namespace NomoAI.API.Features.AdminDashboard.GetAllDoctors
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
-            app.MapGet("api/admin/doctors", async Task<IResult> (bool? isApproved, int pageNumber, int pageSize, IMediator mediator) =>
+            app.MapGet("api/admin/doctors", async Task<IResult> (string? Name , bool? isApproved, int pageNumber, int pageSize, IMediator mediator) =>
             {
-                var query = new GetAllDoctorsQuery(isApproved, pageNumber <=0 ?1 : pageNumber, pageSize <=0 ?10 : pageSize);
+                var query = new GetAllDoctorsQuery(Name, isApproved, pageNumber <=0 ?1 : pageNumber, pageSize <=0 ?10 : pageSize);
                 var result = await mediator.Send(query);
                 return result.IsSuccess ? Results.Ok(result) : result.ToProblem();
             })

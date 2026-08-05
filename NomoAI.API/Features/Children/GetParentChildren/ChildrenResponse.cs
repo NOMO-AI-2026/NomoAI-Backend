@@ -11,5 +11,7 @@ namespace NomoAI.API.Features.Children.GetParentChildren
         public Gender Gender { get; set; }
 
         public int Age { get; set; }
+
+        public string DoctorName { get; set; }
     }
 }

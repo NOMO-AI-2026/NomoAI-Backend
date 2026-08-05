@@ -73,6 +73,23 @@ namespace NomoAI.API.Persistence
                     .OnDelete(DeleteBehavior.Restrict)
                     .IsRequired();
             });
+
+            builder.Entity<Session>(entity =>
+            {
+                entity.Property(session => session.IsDoctorReviewed)
+                    .HasDefaultValue(false);
+
+                entity.Property(session => session.DoctorComment)
+                    .HasMaxLength(1000);
+
+                // Speeds up doctor-dashboard awaiting-review counts.
+                entity.HasIndex(session => new
+                {
+                    session.Status,
+                    session.IsDoctorReviewed,
+                    session.IsDeleted
+                });
+            });
         }
     }
 }

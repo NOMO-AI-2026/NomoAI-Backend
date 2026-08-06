@@ -154,7 +154,10 @@ public sealed class AiCoreClient : IAiCoreClient
         var synthesizeRequest = new AiSynthesizeSpeechRequest
         {
             Text = text,
-            Purpose = purpose
+            Purpose = purpose,
+            // Gemini TTS rejects mp3 (HTTP 400). FastAPI converts wav→pcm for Gemini
+            // then returns a browser-playable WAV. Do not rely on VPS env default.
+            Format = "wav"
         };
 
         Result<AiSynthesizeSpeechResponse> synthesizeResult = await SendAsync<AiSynthesizeSpeechResponse>(

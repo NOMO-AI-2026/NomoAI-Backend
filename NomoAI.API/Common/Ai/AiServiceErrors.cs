@@ -34,6 +34,12 @@ public static class AiServiceErrors
         StatusCodes.Status429TooManyRequests,
         correlationId);
 
+    public static Error InsufficientCredit(string? correlationId = null) => new(
+        "AiService.InsufficientCredit",
+        "Speech synthesis requires OpenRouter credits. Add credits at https://openrouter.ai/settings/credits then retry.",
+        StatusCodes.Status402PaymentRequired,
+        correlationId);
+
     public static Error Unavailable(string? correlationId = null) => new(
         "AiService.Unavailable",
         "The AI service is temporarily unavailable.",

@@ -194,6 +194,15 @@ internal sealed class SubmitAttemptCommandHandler
         }
 
         AiEvaluateAttemptV2Response evaluation = evaluateResult.Value;
+        string spokenText = evaluation.Avatar.SpokenText ?? string.Empty;
+
+        // Start TTS immediately while we persist — cuts a full client round-trip later.
+        Task<(string? Base64, string? ContentType)> feedbackAudioTask =
+            SessionSpeechEmbedder.TryBufferAsync(
+                _aiCoreClient,
+                spokenText,
+                purpose: "encouragement",
+                cancellationToken);
 
         var attempt = new SessionAttempts
         {
@@ -203,30 +212,29 @@ internal sealed class SubmitAttemptCommandHandler
         };
 
         _db.SessionAttempts.Add(attempt);
-        await _db.SaveChangesAsync(cancellationToken);
+
+        AiEvaluateScoreDto? scores = evaluation.Scores;
+        AiSpeechAnalysisScoreDto? analysisScores = evaluation.SpeechAnalysis?.Scores;
 
         _db.AttemptTranscribtions.Add(new AttemptTranscribtion
         {
-            AttemptId = attempt.Id,
+            Attempt = attempt,
             TranscribedText = evaluation.SpeechAnalysis?.Transcription?.Text ?? string.Empty,
             DetectedLanguage = evaluation.SpeechAnalysis?.Transcription?.Language ?? session.Language,
             NormalizedText = evaluation.SpeechAnalysis?.Normalization?.NormalizedText
         });
 
-        AiEvaluateScoreDto? scores = evaluation.Scores;
-        AiSpeechAnalysisScoreDto? analysisScores = evaluation.SpeechAnalysis?.Scores;
-
         _db.AttemptEvaluations.Add(new AttemptEvaluation
         {
-            AttemptId = attempt.Id,
+            Attempt = attempt,
             AccuracyScore = (decimal)(scores?.Accuracy ?? analysisScores?.AccuracyScore ?? 0),
             FluencyScore = (decimal)(scores?.Fluency ?? analysisScores?.FluencyScore ?? 0),
             PronunciationScore = (decimal)(scores?.Pronunciation ?? analysisScores?.PronunciationProxyScore ?? 0),
             CompletenessScore = (decimal)(scores?.Completeness ?? analysisScores?.CompletenessScore ?? 0),
-            Feedback = evaluation.Avatar.SpokenText,
+            Feedback = spokenText,
             IsSuccessful = scores?.Matched ?? analysisScores?.Matched ?? false,
             AdaptiveAction = evaluation.AdaptiveDecision.Action,
-            AvatarSpokenText = evaluation.Avatar.SpokenText,
+            AvatarSpokenText = spokenText,
             AvatarEmotion = evaluation.Avatar.Emotion,
             SpeechOutcome = evaluation.SpeechOutcome,
             Matched = scores?.Matched ?? analysisScores?.Matched,
@@ -238,13 +246,16 @@ internal sealed class SubmitAttemptCommandHandler
 
         ApplyAdaptiveTransition(session, plan, evaluation.AdaptiveDecision.Action);
 
+        // One SaveChanges for attempt + transcript + evaluation + session cursor.
         await _db.SaveChangesAsync(cancellationToken);
+
+        (string? audioBase64, string? audioContentType) = await feedbackAudioTask;
 
         var feedback = new SessionFeedbackDto
         {
             AttemptId = attempt.Id,
             AdaptiveAction = evaluation.AdaptiveDecision.Action,
-            SpokenText = evaluation.Avatar.SpokenText,
+            SpokenText = spokenText,
             Emotion = evaluation.Avatar.Emotion,
             Scores = new SessionFeedbackScoreDto
             {
@@ -255,7 +266,9 @@ internal sealed class SubmitAttemptCommandHandler
                 Relevance = scores?.Relevance,
                 Overall = scores?.Overall ?? analysisScores?.OverallScore ?? 0,
                 Matched = scores?.Matched ?? analysisScores?.Matched ?? false
-            }
+            },
+            AudioBase64 = audioBase64,
+            AudioContentType = audioContentType
         };
 
         SessionRuntimeResponse response = BuildResponse(session, plan, evaluation.AdaptiveDecision.Action, feedback);
@@ -361,8 +374,32 @@ internal sealed class SubmitAttemptCommandHandler
             case AdaptiveActions.ContinueConversation:
             case AdaptiveActions.TakeShortBreak:
             default:
+            {
                 session.CurrentAttemptNumber++;
+
+                // Cap retries: once the step's attempt budget is consumed, advance
+                // (or complete) so the client is not invited to record again → 409.
+                AiSessionStepDto? cappedStep = SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
+                int maximumAttempts = Math.Max(1, cappedStep?.MaximumAttempts ?? 1);
+                if (session.CurrentAttemptNumber < maximumAttempts)
+                {
+                    break;
+                }
+
+                session.CurrentAttemptNumber = 0;
+                int exhaustedNextStep = session.CurrentStepNumber + 1;
+                if (SessionPlanSnapshot.GetStep(plan, exhaustedNextStep) is null)
+                {
+                    session.Status = SessionStatus.Completed;
+                    session.EndedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    session.CurrentStepNumber = exhaustedNextStep;
+                }
+
                 break;
+            }
         }
     }
 
@@ -375,11 +412,12 @@ internal sealed class SubmitAttemptCommandHandler
         string status = SessionRuntimeStatus.Map(session.Status);
         AiSessionStepDto? currentStep = SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
 
-        string command = session.Status != SessionStatus.InProgress
-            ? SessionRuntimeCommand.SessionCompleted
-            : adaptiveAction == AdaptiveActions.TakeShortBreak
-                ? SessionRuntimeCommand.TakeBreak
-                : SessionRuntimeCommand.PlayFeedback;
+        // Always return play_feedback when this submit produced avatar speech so the
+        // client can play TTS even if the adaptive transition just completed the session.
+        string command = adaptiveAction == AdaptiveActions.TakeShortBreak
+                && session.Status == SessionStatus.InProgress
+            ? SessionRuntimeCommand.TakeBreak
+            : SessionRuntimeCommand.PlayFeedback;
 
         return new SessionRuntimeResponse
         {

@@ -20,6 +20,20 @@ public class AiErrorMapperTests
     }
 
     [Fact]
+    public void MapHttpStatus_Maps_PaymentRequired_To_InsufficientCredit()
+    {
+        var error = AiServiceErrorMapper.MapHttpStatus(
+            System.Net.HttpStatusCode.PaymentRequired,
+            """{"error":{"code":"tts_insufficient_credit","message":"credits","correlationId":"c-402","details":{}}}""",
+            responseCorrelationId: null,
+            fallbackCorrelationId: "local-corr");
+
+        Assert.Equal("AiService.InsufficientCredit", error.Code);
+        Assert.Equal(402, error.StatusCode);
+        Assert.Equal("c-402", error.CorrelationId);
+    }
+
+    [Fact]
     public void Invalid_Json_Body_Still_Maps_Status()
     {
         var error = AiServiceErrorMapper.MapHttpStatus(

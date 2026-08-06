@@ -76,7 +76,7 @@ internal sealed class GetAttemptFeedbackSpeechQueryHandler
             return Result.Failure<AiSpeechAudioResult>(SessionRuntimeErrors.FeedbackNotAvailable);
         }
 
-        return await _aiCoreClient.SynthesizeSpeechAsync(spokenText, purpose: "feedback", cancellationToken);
+        return await _aiCoreClient.SynthesizeSpeechAsync(spokenText, purpose: "encouragement", cancellationToken);
     }
 }
 

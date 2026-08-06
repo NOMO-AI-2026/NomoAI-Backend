@@ -95,7 +95,12 @@ internal sealed class GetSessionRuntimeQueryHandler
             : StartSessionCommandHandler.MapStep(currentStep, session.CurrentAttemptNumber);
 
         // After a retry, refresh should resume at recording rather than replaying the step intro.
-        string command = mappedStep is { ExpectsChildResponse: true } && session.CurrentAttemptNumber > 0
+        // Never resume recording when the step attempt budget is already exhausted.
+        bool canRecordMore = mappedStep is { ExpectsChildResponse: true }
+            && session.CurrentAttemptNumber > 0
+            && session.CurrentAttemptNumber < mappedStep.MaximumAttempts;
+
+        string command = canRecordMore
             ? SessionRuntimeCommand.ReadyToRecord
             : SessionRuntimeCommand.PlayAvatarSpeech;
 

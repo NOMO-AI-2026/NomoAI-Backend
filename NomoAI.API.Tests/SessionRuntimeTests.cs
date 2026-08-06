@@ -42,7 +42,7 @@ public class SessionPlanSnapshotTests
         Assert.Null(SessionPlanSnapshot.GetStep(plan, 99));
     }
 
-    internal static AiSessionPlanV2Response MakePlan(int stepCount) => new()
+    internal static AiSessionPlanV2Response MakePlan(int stepCount, int maximumAttempts = 3) => new()
     {
         ActivityType = "word",
         Prompt = "بابا",
@@ -56,7 +56,7 @@ public class SessionPlanSnapshotTests
                 Type = number == 1 ? "introduction" : "guided_practice",
                 Instruction = $"Step {number}",
                 ExpectedChildAction = "Repeat the word",
-                MaximumAttempts = 3,
+                MaximumAttempts = maximumAttempts,
                 Avatar = new AiAvatarInstructionDto
                 {
                     SpokenText = $"Spoken text for step {number}",
@@ -137,6 +137,31 @@ public class AdaptiveTransitionTests
         Assert.Equal(1, session.CurrentAttemptNumber);
     }
 
+    [Fact]
+    public void Retry_When_Attempt_Budget_Exhausted_Advances_To_Next_Step()
+    {
+        Session session = MakeInProgressSession(currentStep: 1, currentAttempt: 0);
+        AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2, maximumAttempts: 1);
+
+        SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, "retry_same");
+
+        Assert.Equal(SessionStatus.InProgress, session.Status);
+        Assert.Equal(2, session.CurrentStepNumber);
+        Assert.Equal(0, session.CurrentAttemptNumber);
+    }
+
+    [Fact]
+    public void Retry_When_Attempt_Budget_Exhausted_On_Last_Step_Completes_Session()
+    {
+        Session session = MakeInProgressSession(currentStep: 2, currentAttempt: 0);
+        AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2, maximumAttempts: 1);
+
+        SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, "retry_same");
+
+        Assert.Equal(SessionStatus.Completed, session.Status);
+        Assert.NotNull(session.EndedAt);
+    }
+
     [Theory]
     [InlineData("end")]
     [InlineData("end_attempts")]
@@ -199,13 +224,17 @@ public class SynthesizeSpeechAsyncTests
     {
         var (client, handler, _) = AiCoreClientTestFactory.Create();
         var audioBytes = Encoding.UTF8.GetBytes("FAKE_MP3_BYTES");
+        string? capturedSynthesizeBody = null;
 
-        handler.Handler = (request, _) =>
+        handler.Handler = async (request, _) =>
         {
             if (request.Method == HttpMethod.Post &&
                 request.RequestUri!.AbsolutePath == "/api/v1/speech/synthesize")
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                capturedSynthesizeBody = request.Content is null
+                    ? null
+                    : await request.Content.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(
                         """
@@ -213,7 +242,7 @@ public class SynthesizeSpeechAsyncTests
                         """,
                         Encoding.UTF8,
                         "application/json")
-                });
+                };
             }
 
             if (request.Method == HttpMethod.Get &&
@@ -225,7 +254,7 @@ public class SynthesizeSpeechAsyncTests
                 };
                 response.Content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
-                return Task.FromResult(response);
+                return response;
             }
 
             throw new InvalidOperationException($"Unexpected request: {request.RequestUri}");
@@ -244,6 +273,7 @@ public class SynthesizeSpeechAsyncTests
         Assert.Equal(2, handler.Requests.Count);
         Assert.Equal(HttpMethod.Post, handler.Requests[0].Method);
         Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+        Assert.Contains("\"format\":\"wav\"", capturedSynthesizeBody);
 
         result.Value.Dispose();
     }

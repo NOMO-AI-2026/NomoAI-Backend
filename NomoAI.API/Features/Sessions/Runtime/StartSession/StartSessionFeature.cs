@@ -118,6 +118,16 @@ internal sealed class StartSessionCommandHandler
 
         AiSessionPlanV2Response plan = planResult.Value;
         DateTime now = DateTime.UtcNow;
+        AiSessionStepDto? firstStep = SessionPlanSnapshot.GetStep(plan, 1);
+        string firstSpoken = firstStep?.Avatar?.SpokenText ?? string.Empty;
+
+        // Synthesize step-1 speech while we persist the session row.
+        Task<(string? Base64, string? ContentType)> speechTask =
+            SessionSpeechEmbedder.TryBufferAsync(
+                _aiCoreClient,
+                firstSpoken,
+                purpose: "instruction",
+                cancellationToken);
 
         var session = new Session
         {
@@ -145,7 +155,7 @@ internal sealed class StartSessionCommandHandler
         _db.Sessions.Add(session);
         await _db.SaveChangesAsync(cancellationToken);
 
-        AiSessionStepDto? firstStep = SessionPlanSnapshot.GetStep(plan, 1);
+        (string? speechBase64, string? speechContentType) = await speechTask;
 
         var response = new SessionRuntimeResponse
         {
@@ -154,7 +164,9 @@ internal sealed class StartSessionCommandHandler
             CurrentStep = firstStep is null ? null : MapStep(firstStep, attemptNumber: 0),
             Command = SessionRuntimeCommand.PlayAvatarSpeech,
             ActivityType = activityType,
-            Prompt = prompt
+            Prompt = prompt,
+            SpeechAudioBase64 = speechBase64,
+            SpeechAudioContentType = speechContentType
         };
 
         return Result.Success(response);
@@ -168,16 +180,23 @@ internal sealed class StartSessionCommandHandler
         _ => "word"
     };
 
-    internal static SessionRuntimeStepDto MapStep(AiSessionStepDto step, int attemptNumber) => new()
+    internal static SessionRuntimeStepDto MapStep(AiSessionStepDto step, int attemptNumber)
     {
-        StepNumber = step.StepNumber,
-        StepType = step.Type,
-        SpokenText = step.Avatar?.SpokenText ?? string.Empty,
-        ExpectsChildResponse = SessionStepTypes.ExpectsChildResponse(step.Type, step.ExpectedChildAction),
-        MaximumAttempts = step.MaximumAttempts,
-        AttemptNumber = attemptNumber,
-        AvatarEmotion = step.Avatar?.Emotion
-    };
+        bool planExpectsResponse = SessionStepTypes.ExpectsChildResponse(step.Type, step.ExpectedChildAction);
+        int maximumAttempts = Math.Max(1, step.MaximumAttempts);
+
+        return new SessionRuntimeStepDto
+        {
+            StepNumber = step.StepNumber,
+            StepType = step.Type,
+            SpokenText = step.Avatar?.SpokenText ?? string.Empty,
+            // Do not invite another recording once the step attempt budget is spent.
+            ExpectsChildResponse = planExpectsResponse && attemptNumber < maximumAttempts,
+            MaximumAttempts = maximumAttempts,
+            AttemptNumber = attemptNumber,
+            AvatarEmotion = step.Avatar?.Emotion
+        };
+    }
 }
 
 public sealed record StartSessionRequest(

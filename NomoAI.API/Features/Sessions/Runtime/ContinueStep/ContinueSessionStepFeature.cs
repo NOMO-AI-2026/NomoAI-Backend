@@ -1,11 +1,11 @@
 using FluentValidation;
 using MediatR;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime.GetSessionRuntime;
-using NomoAI.API.Features.Sessions.Runtime.StartSession;
 using NomoAI.API.Persistence;
 using System.Security.Claims;
 
@@ -31,10 +31,12 @@ internal sealed class ContinueSessionStepCommandHandler
     : IRequestHandler<ContinueSessionStepCommand, Result<SessionRuntimeResponse>>
 {
     private readonly AppDbContext _db;
+    private readonly IAiCoreClient _aiCoreClient;
 
-    public ContinueSessionStepCommandHandler(AppDbContext db)
+    public ContinueSessionStepCommandHandler(AppDbContext db, IAiCoreClient aiCoreClient)
     {
         _db = db;
+        _aiCoreClient = aiCoreClient;
     }
 
     public async Task<Result<SessionRuntimeResponse>> Handle(
@@ -89,9 +91,40 @@ internal sealed class ContinueSessionStepCommandHandler
             session.CurrentStepNumber = nextStepNumber;
         }
 
+        AiSessionStepDto? nextStep = session.Status == SessionStatus.Completed
+            ? null
+            : SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
+        string nextSpoken = nextStep?.Avatar?.SpokenText ?? string.Empty;
+
+        Task<(string? Base64, string? ContentType)> speechTask =
+            SessionSpeechEmbedder.TryBufferAsync(
+                _aiCoreClient,
+                nextSpoken,
+                purpose: "instruction",
+                cancellationToken);
+
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(GetSessionRuntimeQueryHandler.BuildRuntimeResponse(session));
+        SessionRuntimeResponse response = GetSessionRuntimeQueryHandler.BuildRuntimeResponse(session);
+
+        if (response.Command == SessionRuntimeCommand.PlayAvatarSpeech && !string.IsNullOrWhiteSpace(nextSpoken))
+        {
+            (string? speechBase64, string? speechContentType) = await speechTask;
+            response = new SessionRuntimeResponse
+            {
+                SessionId = response.SessionId,
+                Status = response.Status,
+                CurrentStep = response.CurrentStep,
+                Command = response.Command,
+                Feedback = response.Feedback,
+                ActivityType = response.ActivityType,
+                Prompt = response.Prompt,
+                SpeechAudioBase64 = speechBase64,
+                SpeechAudioContentType = speechContentType
+            };
+        }
+
+        return Result.Success(response);
     }
 }
 

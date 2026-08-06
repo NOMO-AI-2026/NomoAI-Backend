@@ -31,12 +31,15 @@ internal static class AiServiceErrorMapper
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
                 AiServiceErrors.Unauthorized(correlationId),
             HttpStatusCode.NotFound => AiServiceErrors.NotFound(correlationId),
+            HttpStatusCode.PaymentRequired => AiServiceErrors.InsufficientCredit(correlationId),
             HttpStatusCode.UnprocessableEntity => MapUnprocessable(remoteCode, correlationId),
             HttpStatusCode.TooManyRequests => AiServiceErrors.RateLimited(correlationId),
             HttpStatusCode.BadGateway or
             HttpStatusCode.ServiceUnavailable or
             HttpStatusCode.GatewayTimeout => AiServiceErrors.Unavailable(correlationId),
             >= HttpStatusCode.InternalServerError => AiServiceErrors.InternalError(correlationId),
+            _ when string.Equals(remoteCode, "tts_insufficient_credit", StringComparison.OrdinalIgnoreCase) =>
+                AiServiceErrors.InsufficientCredit(correlationId),
             _ => AiServiceErrors.InvalidResponse(correlationId)
         };
     }

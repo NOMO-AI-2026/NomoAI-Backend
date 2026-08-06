@@ -65,6 +65,14 @@ public sealed class SessionRuntimeResponse
     public string? ActivityType { get; init; }
 
     public string? Prompt { get; init; }
+
+    /// <summary>
+    /// Optional pre-synthesized avatar/instruction audio for <c>play_avatar_speech</c>.
+    /// When present the React client skips GET .../speech.
+    /// </summary>
+    public string? SpeechAudioBase64 { get; init; }
+
+    public string? SpeechAudioContentType { get; init; }
 }
 
 public sealed class SessionRuntimeStepDto
@@ -95,6 +103,14 @@ public sealed class SessionFeedbackDto
     public string? Emotion { get; init; }
 
     public SessionFeedbackScoreDto? Scores { get; init; }
+
+    /// <summary>
+    /// Optional pre-synthesized feedback audio (base64). When present the React
+    /// client plays it immediately and skips GET .../feedback-speech.
+    /// </summary>
+    public string? AudioBase64 { get; init; }
+
+    public string? AudioContentType { get; init; }
 }
 
 public sealed class SessionFeedbackScoreDto

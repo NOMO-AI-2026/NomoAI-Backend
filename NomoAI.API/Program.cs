@@ -32,6 +32,7 @@ using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Redis;
 using StackExchange.Redis;
 using NomoAI.API.Common.Roles;
+using NomoAI.API.Infrastructure.PayMob.Services;
 
 namespace NomoAI.API
 {
@@ -398,6 +399,8 @@ namespace NomoAI.API
                 options.Limits.MaxRequestBodySize =
                     AiServiceOptions.DefaultMaxAudioBytes + (1024 * 1024);
             });
+            //Payment 
+            builder.Services.AddScoped<IPayMobService, PayMobService>();
 
             var app = builder.Build();
 

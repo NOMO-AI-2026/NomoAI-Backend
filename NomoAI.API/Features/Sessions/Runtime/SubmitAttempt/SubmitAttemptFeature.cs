@@ -142,7 +142,8 @@ internal sealed class SubmitAttemptCommandHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.StepNotFound);
         }
 
-        if (session.CurrentAttemptNumber >= step.MaximumAttempts)
+        if (session.CurrentAttemptNumber >= SessionStepTypes.EffectiveMaximumAttempts(
+                step.Type, step.ExpectedChildAction, step.MaximumAttempts))
         {
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.MaximumAttemptsExceeded);
         }
@@ -165,6 +166,8 @@ internal sealed class SubmitAttemptCommandHandler
 
         int stepAttemptNumber = session.CurrentAttemptNumber + 1;
         int age = session.ChildAge ?? 6;
+        int effectiveMaxAttempts = SessionStepTypes.EffectiveMaximumAttempts(
+            step.Type, step.ExpectedChildAction, step.MaximumAttempts);
 
         var aiRequest = new AiEvaluateAttemptV2Request
         {
@@ -178,7 +181,7 @@ internal sealed class SubmitAttemptCommandHandler
             SpeechLevel = session.SpeechLevel ?? string.Empty,
             Age = age,
             AttemptNumber = stepAttemptNumber,
-            MaximumAttempts = step.MaximumAttempts,
+            MaximumAttempts = effectiveMaxAttempts,
             PreviousAttemptScores = previousScores.Count == 0 ? null : previousScores,
             PreviousDecision = previousDecision,
             ConsecutiveNoSpeechCount = consecutiveNoSpeechCount,
@@ -340,31 +343,24 @@ internal sealed class SubmitAttemptCommandHandler
         switch (action)
         {
             case AdaptiveActions.Advance:
-                int nextStepNumber = session.CurrentStepNumber + 1;
-                session.CurrentAttemptNumber = 0;
-
-                if (SessionPlanSnapshot.GetStep(plan, nextStepNumber) is null)
-                {
-                    session.Status = SessionStatus.Completed;
-                    session.EndedAt = DateTime.UtcNow;
-                }
-                else
-                {
-                    session.CurrentStepNumber = nextStepNumber;
-                }
-
+                AdvanceOrComplete(session, plan);
                 break;
 
             case AdaptiveActions.End:
-            case AdaptiveActions.EndAttempts:
+                // Explicit session end from the adaptive engine only.
                 session.Status = SessionStatus.Completed;
                 session.EndedAt = DateTime.UtcNow;
                 break;
 
+            case AdaptiveActions.EndAttempts:
+                // Exhausted this step's practice budget — keep the session open and move on.
+                AdvanceOrComplete(session, plan);
+                break;
+
             case AdaptiveActions.RecommendDoctorReview:
+                // Flag for clinicians but do not abruptly end the child's session.
                 session.RequiresDoctorReview = true;
-                session.Status = SessionStatus.Completed;
-                session.EndedAt = DateTime.UtcNow;
+                AdvanceOrComplete(session, plan);
                 break;
 
             case AdaptiveActions.RetrySame:
@@ -377,29 +373,37 @@ internal sealed class SubmitAttemptCommandHandler
             {
                 session.CurrentAttemptNumber++;
 
-                // Cap retries: once the step's attempt budget is consumed, advance
-                // (or complete) so the client is not invited to record again → 409.
                 AiSessionStepDto? cappedStep = SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
-                int maximumAttempts = Math.Max(1, cappedStep?.MaximumAttempts ?? 1);
+                int maximumAttempts = cappedStep is null
+                    ? SessionStepTypes.MinimumSpeakingAttempts
+                    : SessionStepTypes.EffectiveMaximumAttempts(
+                        cappedStep.Type, cappedStep.ExpectedChildAction, cappedStep.MaximumAttempts);
+
                 if (session.CurrentAttemptNumber < maximumAttempts)
                 {
                     break;
                 }
 
-                session.CurrentAttemptNumber = 0;
-                int exhaustedNextStep = session.CurrentStepNumber + 1;
-                if (SessionPlanSnapshot.GetStep(plan, exhaustedNextStep) is null)
-                {
-                    session.Status = SessionStatus.Completed;
-                    session.EndedAt = DateTime.UtcNow;
-                }
-                else
-                {
-                    session.CurrentStepNumber = exhaustedNextStep;
-                }
-
+                AdvanceOrComplete(session, plan);
                 break;
             }
+        }
+    }
+
+    /// <summary>Move to the next plan step, or complete only when no steps remain.</summary>
+    private static void AdvanceOrComplete(Session session, AiSessionPlanV2Response plan)
+    {
+        session.CurrentAttemptNumber = 0;
+        int nextStepNumber = session.CurrentStepNumber + 1;
+
+        if (SessionPlanSnapshot.GetStep(plan, nextStepNumber) is null)
+        {
+            session.Status = SessionStatus.Completed;
+            session.EndedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            session.CurrentStepNumber = nextStepNumber;
         }
     }
 

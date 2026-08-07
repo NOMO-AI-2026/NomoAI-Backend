@@ -64,6 +64,9 @@ namespace NomoAI.API.Features.Children.GetChildDetails
                     ParentFullName = c.Parent != null && c.Parent!.IsDeleted == false? c.Parent.User.Fullname : null,
                     ParentEmail = c.Parent != null && c.Parent!.IsDeleted == false? c.Parent.User.Email ?? string.Empty : null,
                     ParentPhoneNumber = c.Parent != null && c.Parent!.IsDeleted == false? c.Parent.User.PhoneNumber : null,
+                    DoctorFullName = c.Doctor != null && c.Doctor!.IsDeleted == false? c.Doctor.User.Fullname : null,
+                    DoctorEmail = c.Doctor != null && c.Doctor!.IsDeleted == false? c.Doctor.User.Email : null,
+                    DoctorPhoneNumber = c.Doctor != null && c.Doctor!.IsDeleted == false? c.Doctor.User.PhoneNumber : null,
                     speechLevel = new SpeechLevelResponse
                     {
                         Id = c.SpeechLevel.Id,

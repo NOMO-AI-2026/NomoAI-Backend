@@ -9,7 +9,7 @@ namespace NomoAI.API.Features.Children.GetParentChildren
     {
         public void MapEndpoint(IEndpointRouteBuilder app)
         {
-            app.MapGet("api/parent/children", async Task<IResult> (ClaimsPrincipal user, IMediator mediator) =>
+            app.MapGet("api/parent/children", async Task<IResult> (string? Name, int? pageNumber, int? pageSize, ClaimsPrincipal user, IMediator mediator) =>
             {
                 var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrWhiteSpace(userId))
@@ -17,7 +17,7 @@ namespace NomoAI.API.Features.Children.GetParentChildren
                     return Results.Unauthorized();
                 }
 
-                var query = new GetParentChildrenQuery(userId);
+                var query = new GetParentChildrenQuery(userId, Name, pageNumber ?? 1, pageSize ?? 10 );
                 var result = await mediator.Send(query);
                 return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblem();
             })
@@ -25,7 +25,7 @@ namespace NomoAI.API.Features.Children.GetParentChildren
             .WithName("GetParentChildren")
             .WithTags("Children")
             .WithSummary("Get children for authenticated parent")
-            .Produces<IEnumerable<ChildrenResponse>>(StatusCodes.Status200OK)
+            .Produces<PaginatedList<ChildrenResponse>>(StatusCodes.Status200OK)
             .Produces<Error>(StatusCodes.Status401Unauthorized)
             .Produces<Error>(StatusCodes.Status404NotFound);
         }

@@ -41,6 +41,8 @@ namespace NomoAI.API.Persistence
 
         public DbSet<SupportTicket> SupportTickets { get; set; }
 
+        public DbSet<SupscriptionPlan> SupscriptionPlan { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

@@ -7,7 +7,7 @@ using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Children.GetDoctorChildren
 {
-    internal sealed class GetDoctorChildrenQueryHandler : IRequestHandler<GetDoctorChildrenQuery, Result<IEnumerable<ChildrenResponse>>>
+    internal sealed class GetDoctorChildrenQueryHandler : IRequestHandler<GetDoctorChildrenQuery, Result<PaginatedList<ChildrenResponse>>>
     {
         private readonly AppDbContext _db;
 
@@ -16,18 +16,18 @@ namespace NomoAI.API.Features.Children.GetDoctorChildren
             _db = db;
         }
 
-        public async Task<Result<IEnumerable<ChildrenResponse>>> Handle(GetDoctorChildrenQuery request, CancellationToken cancellationToken)
+        public async Task<Result<PaginatedList<ChildrenResponse>>> Handle(GetDoctorChildrenQuery request, CancellationToken cancellationToken)
         {
-           // Console.WriteLine($"User Id : {request.UserId}");
-           // int DoctorId = _db.Doctor.Where(x=> x.UserId == request.UserId).Select(x => x.Id).FirstOrDefault();
-            Doctor isDoctorExist = await _db.Doctor.Where(x => !x.IsDeleted && x.UserId==request.UserId).FirstOrDefaultAsync();
-            if (isDoctorExist==null) {
-                return Result.Failure<IEnumerable<ChildrenResponse>>(ChildrenErrors.DoctorNotFound);
+            Doctor isDoctorExist = await _db.Doctor.Where(x => !x.IsDeleted && x.UserId == request.UserId).FirstOrDefaultAsync();
+            if (isDoctorExist == null)
+            {
+                return Result.Failure<PaginatedList<ChildrenResponse>>(ChildrenErrors.DoctorNotFound);
             }
             int DoctorId = isDoctorExist.Id;
-            var children = await _db.Children
+
+            var query = _db.Children
                 .AsNoTracking()
-                .Where(c => !c.IsDeleted && c.DoctorId == DoctorId)
+                .Where(c => !c.IsDeleted && c.DoctorId == DoctorId && (request.Name == null || c.FullName.Contains(request.Name)))
                 .Select(c => new ChildrenResponse
                 {
                     Id = c.Id,
@@ -35,9 +35,11 @@ namespace NomoAI.API.Features.Children.GetDoctorChildren
                     Gender = c.Gender,
                     Age = c.Age
                 })
-                .ToListAsync(cancellationToken);
+                .OrderBy(c => c.FullName)
+                .AsQueryable();
 
-            return Result.Success<IEnumerable<ChildrenResponse>>(children);
+            var paginated = await PaginatedList<ChildrenResponse>.CreateAsync(query, request.PageNumber ?? 1, request.PageSize ?? 10);
+            return Result.Success(paginated);
         }
     }
 }

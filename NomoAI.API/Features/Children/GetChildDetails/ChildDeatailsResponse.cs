@@ -17,6 +17,12 @@ namespace NomoAI.API.Features.Children.GetChildDetails
 
         public string? ParentPhoneNumber { get; set; }
 
+        public string ? DoctorFullName { get; set; } = string.Empty;
+
+        public string ? DoctorEmail { get; set; }
+
+        public string ? DoctorPhoneNumber { get; set; }
+
         public SpeechLevelResponse speechLevel { get; set; } 
     }
 }

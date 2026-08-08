@@ -62,6 +62,7 @@ internal static class SessionSummaryMapper
             StartedAt = session.StartedAt,
             EndedAt = session.EndedAt,
             Outcome = summary.Outcome ?? string.Empty,
+            OutcomeLabel = SessionSummaryAnalytics.MapDoctorOutcomeLabel(summary.Outcome ?? string.Empty),
             ShortSummary = summary.AISummary,
             Strengths = DeserializeList(summary.Strengths),
             PracticeAreas = DeserializeList(summary.Weaknesses),
@@ -101,6 +102,9 @@ internal static class SessionSummaryMapper
         StartedAt = dto.StartedAt,
         EndedAt = dto.EndedAt,
         Outcome = dto.Outcome,
+        OutcomeLabel = string.IsNullOrWhiteSpace(dto.OutcomeLabel)
+            ? SessionSummaryAnalytics.MapDoctorOutcomeLabel(dto.Outcome)
+            : dto.OutcomeLabel,
         ShortSummary = dto.ShortSummary,
         Strengths = dto.Strengths,
         PracticeAreas = dto.PracticeAreas,

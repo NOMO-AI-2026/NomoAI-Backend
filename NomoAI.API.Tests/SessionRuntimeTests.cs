@@ -140,6 +140,7 @@ public class AdaptiveTransitionTests
     [Fact]
     public void Retry_When_Attempt_Budget_Exhausted_Advances_To_Next_Step()
     {
+        // Step 1 is introduction → no speaking floor; planned max=1 exhausts on first retry.
         Session session = MakeInProgressSession(currentStep: 1, currentAttempt: 0);
         AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2, maximumAttempts: 1);
 
@@ -153,7 +154,10 @@ public class AdaptiveTransitionTests
     [Fact]
     public void Retry_When_Attempt_Budget_Exhausted_On_Last_Step_Completes_Session()
     {
-        Session session = MakeInProgressSession(currentStep: 2, currentAttempt: 0);
+        // Guided practice uses a child-speaking floor (5); start one below the floor.
+        Session session = MakeInProgressSession(
+            currentStep: 2,
+            currentAttempt: SessionStepTypes.MinimumSpeakingAttempts - 1);
         AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2, maximumAttempts: 1);
 
         SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, "retry_same");
@@ -163,14 +167,27 @@ public class AdaptiveTransitionTests
     }
 
     [Theory]
-    [InlineData("end")]
     [InlineData("end_attempts")]
-    public void End_Actions_Complete_The_Session(string action)
+    public void EndAttempts_Advances_Instead_Of_Completing_When_More_Steps_Remain(string action)
     {
         Session session = MakeInProgressSession(currentStep: 1, currentAttempt: 1);
         AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2);
 
         SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, action);
+
+        Assert.Equal(SessionStatus.InProgress, session.Status);
+        Assert.Equal(2, session.CurrentStepNumber);
+        Assert.Equal(0, session.CurrentAttemptNumber);
+        Assert.Null(session.EndedAt);
+    }
+
+    [Fact]
+    public void End_Action_Completes_The_Session()
+    {
+        Session session = MakeInProgressSession(currentStep: 1, currentAttempt: 1);
+        AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2);
+
+        SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, "end");
 
         Assert.Equal(SessionStatus.Completed, session.Status);
         Assert.NotNull(session.EndedAt);
@@ -178,7 +195,7 @@ public class AdaptiveTransitionTests
     }
 
     [Fact]
-    public void RecommendDoctorReview_Flags_And_Completes_Session()
+    public void RecommendDoctorReview_Flags_And_Keeps_Session_Open_When_Steps_Remain()
     {
         Session session = MakeInProgressSession(currentStep: 1, currentAttempt: 2);
         AiSessionPlanV2Response plan = SessionPlanSnapshotTests.MakePlan(stepCount: 2);
@@ -186,8 +203,9 @@ public class AdaptiveTransitionTests
         SubmitAttemptCommandHandler.ApplyAdaptiveTransition(session, plan, "recommend_doctor_review");
 
         Assert.True(session.RequiresDoctorReview);
-        Assert.Equal(SessionStatus.Completed, session.Status);
-        Assert.NotNull(session.EndedAt);
+        Assert.Equal(SessionStatus.InProgress, session.Status);
+        Assert.Equal(2, session.CurrentStepNumber);
+        Assert.Null(session.EndedAt);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ using NomoAI.API.Features.Sessions.Runtime.GetSessionRuntime;
 using NomoAI.API.Features.Sessions.Runtime.SessionSpeech;
 using NomoAI.API.Features.Sessions.Runtime.StartSession;
 using NomoAI.API.Features.Sessions.Runtime.SubmitAttempt;
+using NomoAI.API.Features.Sessions.Summary.GenerateSessionSummary;
 
 namespace NomoAI.API.Features.Sessions;
 
@@ -23,7 +24,6 @@ public static class SessionsEndpoints
         EvaluateAttemptEndpoint.MapEndpoint(aiGroup);
         CreateSessionSummaryEndpoint.MapEndpoint(aiGroup);
 
-        // Session-runtime vertical slice: persisted sessions driving the React avatar UI.
         RouteGroupBuilder runtimeGroup = app
             .MapGroup("/api/sessions")
             .WithTags("Sessions Runtime");
@@ -34,6 +34,7 @@ public static class SessionsEndpoints
         SessionSpeechEndpoint.MapEndpoint(runtimeGroup);
         AttemptFeedbackSpeechEndpoint.MapEndpoint(runtimeGroup);
         SubmitAttemptEndpoint.MapEndpoint(runtimeGroup);
+        GenerateSessionSummaryEndpoint.MapEndpoint(runtimeGroup);
 
         return app;
     }

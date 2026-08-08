@@ -17,5 +17,12 @@ namespace NomoAI.API.Domain.Entities
 
         public ICollection<Children> Children { get; set; }
 
+        public ICollection<Payment>Payments { get; set; }
+
+        public DoctorCreditWallet creditWallet { get; set; }
+
+        public ICollection<DoctorPlanPurchase> PlanPurchases { get; set; }
+
+        public ICollection<DoctorTransaction> Transactions { get; set; }
     }
 }

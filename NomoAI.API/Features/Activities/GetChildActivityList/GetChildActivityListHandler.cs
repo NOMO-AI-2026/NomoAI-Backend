@@ -24,7 +24,9 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
                     Id = a.Id,
                     ActivityTarget = a.ActivityTarget,
                     Content = a.Content,
-                    EstimatedDurationMinutes = a.EstimatedDurationMinutes
+                    EstimatedDurationMinutes = a.EstimatedDurationMinutes,
+                    canMakeSession = a.canMakeSession
+
                 })
                 .ToListAsync(cancellationToken);
 

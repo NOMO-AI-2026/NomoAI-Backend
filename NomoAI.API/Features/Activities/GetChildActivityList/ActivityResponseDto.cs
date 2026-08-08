@@ -8,5 +8,6 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
         public ActivityTargetType ActivityTarget { get; set; }
         public string Content { get; set; } = string.Empty;
         public int EstimatedDurationMinutes { get; set; }
+        public bool canMakeSession { get; set; } = true;
     }
 }

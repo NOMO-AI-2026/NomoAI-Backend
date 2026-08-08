@@ -41,14 +41,15 @@ internal sealed class ReviewDoctorSessionHandler
                 DoctorDashboardErrors.DoctorNotFound);
         }
 
-        if (!doctor.IsApproved)
-        {
-            return Result.Failure<ReviewDoctorSessionResponse>(
-                DoctorDashboardErrors.DoctorNotApproved);
-        }
+        //if (!doctor.IsApproved)
+        //{
+        //    return Result.Failure<ReviewDoctorSessionResponse>(
+        //        DoctorDashboardErrors.DoctorNotApproved);
+        //}
 
         var session = await _dbContext.Sessions
             .Include(s => s.Child)
+            .Include(s => s.Activity)
             .Where(s =>
                 s.Id == request.SessionId &&
                 !s.IsDeleted)
@@ -80,6 +81,7 @@ internal sealed class ReviewDoctorSessionHandler
         session.DoctorRating = request.Rating;
         session.DoctorComment = trimmedComment;
         session.IsDoctorReviewed = true;
+        session.Activity.canMakeSession = request.repeatSession;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 

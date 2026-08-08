@@ -7,5 +7,6 @@ public sealed record ReviewDoctorSessionCommand(
     int SessionId,
     string DoctorUserId,
     int Rating,
-    string Comment)
+    string Comment,
+    bool repeatSession)
     : IRequest<Result<ReviewDoctorSessionResponse>>;

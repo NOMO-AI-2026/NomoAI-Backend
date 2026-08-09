@@ -16,10 +16,10 @@ public static class UpdateActivityEndpoint
             .WithName("UpdateActivity")
             .WithSummary("Update a specific activity")
             .WithDescription(
-                "Updates the target, content, and estimated " +
-                "duration of a specific activity. " +
-                "Only the doctor responsible for the child " +
-                "can update the activity.")
+                "Updates the target, content, estimated duration, " +
+                "and session availability (CanMakeSession) of a " +
+                "specific activity. Only the doctor responsible " +
+                "for the child can update the activity.")
             .Accepts<UpdateActivityRequest>(
                 "application/json")
             .Produces<UpdateActivityResponse>(
@@ -57,6 +57,7 @@ public static class UpdateActivityEndpoint
             request.ActivityTarget,
             request.Content,
             request.EstimatedDurationMinutes,
+            request.CanMakeSession,
             doctorUserId);
 
         Result<UpdateActivityResponse> result =

@@ -85,6 +85,10 @@ internal sealed class ContinueSessionStepCommandHandler
         {
             session.Status = SessionStatus.Completed;
             session.EndedAt = DateTime.UtcNow;
+            await ActivitySessionGate.MarkUnavailableAfterCompletedSessionAsync(
+                _db,
+                session.ActivityId,
+                cancellationToken);
         }
         else
         {

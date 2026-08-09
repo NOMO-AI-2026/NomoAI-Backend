@@ -16,15 +16,24 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
 
         public async Task<Result<IEnumerable<ActivityResponseDto>>> Handle(GetChildActivityListQuery request, CancellationToken cancellationToken)
         {
-            var activities = await _db.Activities
+            IQueryable<Domain.Entities.Activity> query = _db.Activities
                 .AsNoTracking()
-                .Where(a => !a.IsDeleted && a.ChildId == request.ChildId)
+                .Where(a => !a.IsDeleted && a.ChildId == request.ChildId);
+
+            // Session-start picker only — manage/history UIs keep seeing used activities.
+            if (request.OnlyAvailableForSession)
+            {
+                query = query.Where(a => a.CanMakeSession);
+            }
+
+            var activities = await query
                 .Select(a => new ActivityResponseDto
                 {
                     Id = a.Id,
                     ActivityTarget = a.ActivityTarget,
                     Content = a.Content,
-                    EstimatedDurationMinutes = a.EstimatedDurationMinutes
+                    EstimatedDurationMinutes = a.EstimatedDurationMinutes,
+                    CanMakeSession = a.CanMakeSession
                 })
                 .ToListAsync(cancellationToken);
 

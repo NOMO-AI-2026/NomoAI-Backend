@@ -249,7 +249,15 @@ internal sealed class SubmitAttemptCommandHandler
 
         ApplyAdaptiveTransition(session, plan, evaluation.AdaptiveDecision.Action);
 
-        // One SaveChanges for attempt + transcript + evaluation + session cursor.
+        if (session.Status == SessionStatus.Completed)
+        {
+            await ActivitySessionGate.MarkUnavailableAfterCompletedSessionAsync(
+                _db,
+                session.ActivityId,
+                cancellationToken);
+        }
+
+        // One SaveChanges for attempt + transcript + evaluation + session cursor (+ activity gate).
         await _db.SaveChangesAsync(cancellationToken);
 
         (string? audioBase64, string? audioContentType) = await feedbackAudioTask;

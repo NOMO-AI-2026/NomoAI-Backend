@@ -91,6 +91,11 @@ internal sealed class StartSessionCommandHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.ActivityDoesNotBelongToChild);
         }
 
+        if (!ActivitySessionGate.IsAvailableForNewSession(activity))
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.ActivitySessionAlreadyCreated);
+        }
+
         string activityType = MapActivityTargetType(activity.ActivityTarget);
         string prompt = activity.Content;
         int age = Math.Clamp(child.Age, 2, 18);
@@ -114,6 +119,13 @@ internal sealed class StartSessionCommandHandler
         if (planResult.IsFailure)
         {
             return Result.Failure<SessionRuntimeResponse>(planResult.Error);
+        }
+
+        // Re-check after slow AI planning so a just-completed session cannot race a start.
+        await _db.Entry(activity).ReloadAsync(cancellationToken);
+        if (!ActivitySessionGate.IsAvailableForNewSession(activity))
+        {
+            return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.ActivitySessionAlreadyCreated);
         }
 
         AiSessionPlanV2Response plan = planResult.Value;

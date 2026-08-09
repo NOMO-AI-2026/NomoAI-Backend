@@ -74,6 +74,12 @@ namespace NomoAI.API.Persistence
                     .IsRequired();
             });
 
+            builder.Entity<Activity>(entity =>
+            {
+                entity.Property(activity => activity.CanMakeSession)
+                    .HasDefaultValue(true);
+            });
+
             builder.Entity<Session>(entity =>
             {
                 entity.Property(session => session.IsDoctorReviewed)

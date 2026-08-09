@@ -83,7 +83,8 @@ internal sealed class CreateActivityHandler
                 ActivityTarget = request.ActivityTarget,
                 Content = request.Content.Trim(),
                 EstimatedDurationMinutes =
-                    request.EstimatedDurationMinutes
+                    request.EstimatedDurationMinutes,
+                CanMakeSession = true
             };
 
         _dbContext.Activities.Add(activity);

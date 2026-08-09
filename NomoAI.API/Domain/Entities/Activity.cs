@@ -14,6 +14,12 @@ namespace NomoAI.API.Domain.Entities
         public string Content { get; set; } = string.Empty;
         public int EstimatedDurationMinutes { get; set; }
 
+        /// <summary>
+        /// When true, this activity may be used to start a new therapy session.
+        /// Becomes false after a related session completes successfully.
+        /// </summary>
+        public bool CanMakeSession { get; set; } = true;
+
         public bool canMakeSession { get; set; } = true;
         public Children Child { get; set; } = null!;
         public ICollection<Session> Sessions { get; set; }

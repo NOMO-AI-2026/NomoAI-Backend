@@ -3,5 +3,10 @@ using NomoAI.API.Common.Abstractions;
 
 namespace NomoAI.API.Features.Activities.GetChildActivityList
 {
-    public record GetChildActivityListQuery(int ChildId) : IRequest<Result<IEnumerable<ActivityResponseDto>>>;
+    /// <param name="OnlyAvailableForSession">
+    /// When true, returns only activities that can still start a therapy session.
+    /// When false/omitted, returns all non-deleted activities (history / manage UI).
+    /// </param>
+    public record GetChildActivityListQuery(int ChildId, bool OnlyAvailableForSession = false)
+        : IRequest<Result<IEnumerable<ActivityResponseDto>>>;
 }

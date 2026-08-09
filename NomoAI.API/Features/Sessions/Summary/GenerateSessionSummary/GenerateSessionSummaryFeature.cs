@@ -1,11 +1,8 @@
 using System.Security.Claims;
-using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
-using NomoAI.API.Common.Ai;
-using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime;
@@ -30,12 +27,10 @@ internal sealed class GenerateSessionSummaryCommandHandler
     : IRequestHandler<GenerateSessionSummaryCommand, Result<SessionSummaryDto>>
 {
     private readonly AppDbContext _db;
-    private readonly IAiCoreClient _aiCoreClient;
 
-    public GenerateSessionSummaryCommandHandler(AppDbContext db, IAiCoreClient aiCoreClient)
+    public GenerateSessionSummaryCommandHandler(AppDbContext db)
     {
         _db = db;
-        _aiCoreClient = aiCoreClient;
     }
 
     public async Task<Result<SessionSummaryDto>> Handle(
@@ -72,29 +67,28 @@ internal sealed class GenerateSessionSummaryCommandHandler
                 s => s.SessionId == session.Id && !s.IsDeleted,
                 cancellationToken);
 
-        if (existing is not null && !request.ForceRegenerate)
+        IReadOnlyList<SessionSummaryAnalytics.AttemptSignal> signals =
+            await SessionSummaryAnalytics.LoadAttemptSignalsAsync(_db, session.Id, cancellationToken);
+
+        if (signals.Count == 0)
+        {
+            return Result.Failure<SessionSummaryDto>(SessionSummaryErrors.NoAttempts);
+        }
+
+        // Always refresh analytics from DB so attempt counts / scores stay truthful.
+        // force=false still updates when an older soft-AI summary exists.
+        bool shouldRewrite = existing is null
+            || request.ForceRegenerate
+            || existing.SummaryGenerationMode != "db_analytics"
+            || existing.TotalAttempts != signals.Count;
+
+        if (existing is not null && !shouldRewrite)
         {
             return Result.Success(SessionSummaryMapper.ToDto(session, existing, childName));
         }
 
-        (AiSessionSummaryRequest? aiRequest, string? errorCode) =
-            await SessionSummaryRequestFactory.BuildAsync(_db, session, cancellationToken);
-
-        if (aiRequest is null)
-        {
-            return Result.Failure<SessionSummaryDto>(
-                errorCode == "no_attempts"
-                    ? SessionSummaryErrors.NoAttempts
-                    : SessionSummaryErrors.GenerationFailed);
-        }
-
-        Result<AiSessionSummaryResponse> aiResult =
-            await _aiCoreClient.CreateSessionSummaryAsync(aiRequest, cancellationToken);
-
-        if (aiResult.IsFailure)
-        {
-            return Result.Failure<SessionSummaryDto>(aiResult.Error);
-        }
+        SessionSummaryAnalytics.ComputedAnalytics analytics =
+            SessionSummaryAnalytics.Compute(session, signals);
 
         SessionSummary entity = existing ?? new SessionSummary
         {
@@ -107,7 +101,7 @@ internal sealed class GenerateSessionSummaryCommandHandler
             _db.SessionSummaries.Add(entity);
         }
 
-        SessionSummaryMapper.ApplyAiResponse(entity, aiResult.Value);
+        SessionSummaryAnalytics.ApplyToEntity(entity, analytics);
         await _db.SaveChangesAsync(cancellationToken);
 
         return Result.Success(SessionSummaryMapper.ToDto(session, entity, childName));
@@ -122,7 +116,7 @@ public static class GenerateSessionSummaryEndpoint
             .MapPost("/{sessionId:int}/summary", HandleAsync)
             .RequireAuthorization(policy => policy.RequireRole("Doctor", "Parent"))
             .WithName("GenerateSessionSummary")
-            .WithSummary("Generate and persist an AI session summary from recorded attempts")
+            .WithSummary("Generate and persist an analytical session summary from recorded attempts")
             .Produces<SessionSummaryDto>(StatusCodes.Status200OK)
             .Produces<Error>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)

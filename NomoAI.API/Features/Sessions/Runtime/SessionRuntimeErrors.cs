@@ -34,6 +34,11 @@ public static class SessionRuntimeErrors
         "The activity does not belong to this child.",
         StatusCodes.Status400BadRequest);
 
+    public static readonly Error ActivitySessionAlreadyCreated = new(
+        "SessionRuntime.ActivitySessionAlreadyCreated",
+        "This activity was already used to complete a session and cannot start another.",
+        StatusCodes.Status409Conflict);
+
     public static readonly Error SpeechLevelNotFound = new(
         "SessionRuntime.SpeechLevelNotFound",
         "The child's speech level was not found.",

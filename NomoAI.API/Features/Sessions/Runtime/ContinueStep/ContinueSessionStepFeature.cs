@@ -6,6 +6,7 @@ using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime.GetSessionRuntime;
+using NomoAI.API.Features.Sessions.Summary;
 using NomoAI.API.Persistence;
 using System.Security.Claims;
 
@@ -85,6 +86,14 @@ internal sealed class ContinueSessionStepCommandHandler
         {
             session.Status = SessionStatus.Completed;
             session.EndedAt = DateTime.UtcNow;
+            await ActivitySessionGate.MarkUnavailableAfterCompletedSessionAsync(
+                _db,
+                session.ActivityId,
+                cancellationToken);
+            await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
+                _db,
+                session,
+                cancellationToken);
         }
         else
         {

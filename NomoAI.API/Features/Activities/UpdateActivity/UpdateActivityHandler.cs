@@ -101,7 +101,10 @@ internal sealed class UpdateActivityHandler
                     .SetProperty(
                         activity =>
                             activity.EstimatedDurationMinutes,
-                        request.EstimatedDurationMinutes),
+                        request.EstimatedDurationMinutes)
+                    .SetProperty(
+                        activity => activity.CanMakeSession,
+                        request.CanMakeSession),
                 cancellationToken);
 
         if (affectedRows == 0)
@@ -116,6 +119,7 @@ internal sealed class UpdateActivityHandler
             request.ActivityTarget,
             normalizedContent,
             request.EstimatedDurationMinutes,
+            request.CanMakeSession,
             "Activity updated successfully.");
 
         return Result.Success(response);

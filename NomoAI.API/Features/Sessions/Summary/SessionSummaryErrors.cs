@@ -9,6 +9,11 @@ public static class SessionSummaryErrors
         "Session not found.",
         StatusCodes.Status404NotFound);
 
+    public static readonly Error ChildNotFound = new(
+        "SessionSummary.ChildNotFound",
+        "Child not found.",
+        StatusCodes.Status404NotFound);
+
     public static readonly Error Forbidden = new(
         "SessionSummary.Forbidden",
         "You do not have permission to access this session summary.",

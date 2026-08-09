@@ -8,4 +8,5 @@ public sealed record UpdateActivityResponse(
     ActivityTargetType ActivityTarget,
     string Content,
     int EstimatedDurationMinutes,
+    bool CanMakeSession,
     string Message);

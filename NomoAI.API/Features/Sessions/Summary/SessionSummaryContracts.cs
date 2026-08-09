@@ -23,6 +23,9 @@ public sealed class SessionSummaryDto
 
     public string Outcome { get; init; } = string.Empty;
 
+    /// <summary>Arabic clinical interpretation of <see cref="Outcome"/>.</summary>
+    public string OutcomeLabel { get; init; } = string.Empty;
+
     public string ShortSummary { get; init; } = string.Empty;
 
     public IReadOnlyList<string> Strengths { get; init; } = Array.Empty<string>();
@@ -94,6 +97,9 @@ public sealed class DoctorSessionSummaryResponse
     public DateTime? EndedAt { get; init; }
 
     public string Outcome { get; init; } = string.Empty;
+
+    /// <summary>Arabic clinical interpretation — never show raw outcome codes in UI.</summary>
+    public string OutcomeLabel { get; init; } = string.Empty;
 
     public string ShortSummary { get; init; } = string.Empty;
 

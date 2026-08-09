@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NomoAI.API.Persistence;
 
@@ -11,9 +12,11 @@ using NomoAI.API.Persistence;
 namespace NomoAI.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809192040_resolveActivityConflict")]
+    partial class resolveActivityConflict
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -191,7 +194,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("ChildId");
 
-                    b.ToTable("Activities", (string)null);
+                    b.ToTable("Activities");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.ApplicationUser", b =>
@@ -304,7 +307,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("AttemptId");
 
-                    b.ToTable("AttemptTranscribtions", (string)null);
+                    b.ToTable("AttemptTranscribtions");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.ChildProgressAlert", b =>
@@ -339,7 +342,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("ChildId");
 
-                    b.ToTable("ChildProgressAlerts", (string)null);
+                    b.ToTable("ChildProgressAlerts");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Children", b =>
@@ -389,7 +392,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("SpeechLevelId");
 
-                    b.ToTable("Children", (string)null);
+                    b.ToTable("Children");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Doctor", b =>
@@ -426,7 +429,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Doctor", (string)null);
+                    b.ToTable("Doctor");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorCreditWallet", b =>
@@ -569,7 +572,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Parents", (string)null);
+                    b.ToTable("Parents");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Payment", b =>
@@ -637,7 +640,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentMethods", (string)null);
+                    b.ToTable("PaymentMethods");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.PaymentQuickLink", b =>
@@ -781,7 +784,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("Status", "IsDoctorReviewed", "IsDeleted");
 
-                    b.ToTable("Sessions", (string)null);
+                    b.ToTable("Sessions");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.SessionAttempts", b =>
@@ -813,7 +816,7 @@ namespace NomoAI.API.Migrations
                         .IsUnique()
                         .HasFilter("[IsDeleted] = 0");
 
-                    b.ToTable("SessionAttempts", (string)null);
+                    b.ToTable("SessionAttempts");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.SpeechLevel", b =>
@@ -840,7 +843,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SpeechLevels", (string)null);
+                    b.ToTable("SpeechLevels");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.SupportTicket", b =>
@@ -892,7 +895,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("SupportTickets", (string)null);
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.SupscriptionPlan", b =>
@@ -927,7 +930,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SupscriptionPlan", (string)null);
+                    b.ToTable("SupscriptionPlan");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.AttemptEvaluation", b =>
@@ -997,7 +1000,7 @@ namespace NomoAI.API.Migrations
                     b.HasIndex("AttemptId")
                         .IsUnique();
 
-                    b.ToTable("AttemptEvaluations", (string)null);
+                    b.ToTable("AttemptEvaluations");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.ChildSpeechLevelHistory", b =>
@@ -1037,7 +1040,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("PreviousSpeechLevelId");
 
-                    b.ToTable("ChildSpeechLevelHistories", (string)null);
+                    b.ToTable("ChildSpeechLevelHistories");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.DoctorNotes", b =>
@@ -1074,7 +1077,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.ToTable("DoctorNotes", (string)null);
+                    b.ToTable("DoctorNotes");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.SessionSummary", b =>
@@ -1188,7 +1191,7 @@ namespace NomoAI.API.Migrations
                         .IsUnique()
                         .HasFilter("[IsDeleted] = 0");
 
-                    b.ToTable("SessionSummaries", (string)null);
+                    b.ToTable("SessionSummaries");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

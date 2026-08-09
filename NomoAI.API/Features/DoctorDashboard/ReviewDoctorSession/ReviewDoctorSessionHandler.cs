@@ -81,7 +81,7 @@ internal sealed class ReviewDoctorSessionHandler
         session.DoctorRating = request.Rating;
         session.DoctorComment = trimmedComment;
         session.IsDoctorReviewed = true;
-        session.Activity.canMakeSession = request.repeatSession;
+        session.Activity.CanMakeSession = request.repeatSession;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 

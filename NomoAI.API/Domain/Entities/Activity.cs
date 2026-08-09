@@ -19,8 +19,6 @@ namespace NomoAI.API.Domain.Entities
         /// Becomes false after a related session completes successfully.
         /// </summary>
         public bool CanMakeSession { get; set; } = true;
-
-        public bool canMakeSession { get; set; } = true;
         public Children Child { get; set; } = null!;
         public ICollection<Session> Sessions { get; set; }
     }

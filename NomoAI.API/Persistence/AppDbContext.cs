@@ -41,6 +41,20 @@ namespace NomoAI.API.Persistence
 
         public DbSet<SupportTicket> SupportTickets { get; set; }
 
+        public DbSet<SupscriptionPlan> SupscriptionPlan { get; set; }
+
+        public DbSet<PaymentQuickLink> PaymentQuickLinks { get; set; }
+
+        public DbSet<Payment> Payments {get; set;}
+
+        public DbSet<PaymentMethod> PaymentMethods { get; set; }
+
+        public DbSet<DoctorCreditWallet> DoctorCreditWallets { get; set; }
+
+        public DbSet<DoctorPlanPurchase> DoctorPlanPurchases { get; set; }
+
+        public DbSet<DoctorTransaction> DoctorTransactions { get; set; }
+        
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -123,6 +137,44 @@ namespace NomoAI.API.Persistence
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            builder.Entity<Payment>(entity =>
+            {
+                entity.ToTable("Payment");
+            });
+
+            builder.Entity<PaymentQuickLink>(entity =>
+            {
+                entity.ToTable("PaymentQuickLink");
+
+                entity.Property(link => link.Idempotency)
+                    .HasMaxLength(100)
+                    .IsRequired();
+
+                entity
+                    .HasIndex(link => link.Idempotency)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+            });
+
+            builder.Entity<DoctorCreditWallet>(entity =>
+            {
+                entity.ToTable("DoctorCreditWallet");
+
+                entity
+                    .HasIndex(wallet => wallet.DoctorId)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+            });
+
+            builder.Entity<DoctorPlanPurchase>(entity =>
+            {
+                entity.ToTable("DoctorPlanPurchase");
+            });
+
+            builder.Entity<DoctorTransaction>(entity =>
+            {
+                entity.ToTable("DoctorTransaction");
+            });
             builder.Entity<SessionSummary>(entity =>
             {
                 entity

@@ -187,6 +187,9 @@ namespace NomoAI.API.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("canMakeSession")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ChildId");
@@ -429,6 +432,124 @@ namespace NomoAI.API.Migrations
                     b.ToTable("Doctor");
                 });
 
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorCreditWallet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AvailableMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("DoctorCreditWallet", (string)null);
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorPlanPurchase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PurchasedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PurchasedMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PurchasedPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("DoctorPlanPurchase", (string)null);
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BalanceAfter")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PlanPurchaseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.HasIndex("PlanPurchaseId");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("DoctorTransaction", (string)null);
+                });
+
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Parent", b =>
                 {
                     b.Property<int>("Id")
@@ -452,6 +573,116 @@ namespace NomoAI.API.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Parents");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.Payment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Currency")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethodId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.HasIndex("PaymentMethodId");
+
+                    b.ToTable("Payment", (string)null);
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.PaymentMethod", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PaymentMethodType")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaymentMethods");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.PaymentQuickLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Idempotency")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("clientUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("shortUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Idempotency")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PaymentId");
+
+                    b.ToTable("PaymentQuickLink", (string)null);
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Session", b =>
@@ -665,6 +896,41 @@ namespace NomoAI.API.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("SupportTickets");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.SupscriptionPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Currency")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("IncludedMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SupscriptionPlan");
                 });
 
             modelBuilder.Entity("NomoDoc.Domain.Entities.AttemptEvaluation", b =>
@@ -1048,6 +1314,65 @@ namespace NomoAI.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorCreditWallet", b =>
+                {
+                    b.HasOne("NomoAI.API.Domain.Entities.Doctor", "Doctor")
+                        .WithOne("creditWallet")
+                        .HasForeignKey("NomoAI.API.Domain.Entities.DoctorCreditWallet", "DoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorPlanPurchase", b =>
+                {
+                    b.HasOne("NomoAI.API.Domain.Entities.Doctor", "Doctor")
+                        .WithMany("PlanPurchases")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NomoAI.API.Domain.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NomoAI.API.Domain.Entities.SupscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.DoctorTransaction", b =>
+                {
+                    b.HasOne("NomoAI.API.Domain.Entities.Doctor", null)
+                        .WithMany("Transactions")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NomoAI.API.Domain.Entities.DoctorPlanPurchase", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanPurchaseId");
+
+                    b.HasOne("NomoAI.API.Domain.Entities.Session", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId");
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("Session");
+                });
+
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Parent", b =>
                 {
                     b.HasOne("NomoAI.API.Domain.Entities.ApplicationUser", "User")
@@ -1057,6 +1382,36 @@ namespace NomoAI.API.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.Payment", b =>
+                {
+                    b.HasOne("NomoAI.API.Domain.Entities.Doctor", "Doctor")
+                        .WithMany("Payments")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("NomoAI.API.Domain.Entities.PaymentMethod", "paymentMethod")
+                        .WithMany()
+                        .HasForeignKey("PaymentMethodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+
+                    b.Navigation("paymentMethod");
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.PaymentQuickLink", b =>
+                {
+                    b.HasOne("NomoAI.API.Domain.Entities.Payment", "Payment")
+                        .WithMany("PaymentQuickLinks")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Session", b =>
@@ -1183,6 +1538,20 @@ namespace NomoAI.API.Migrations
             modelBuilder.Entity("NomoAI.API.Domain.Entities.Doctor", b =>
                 {
                     b.Navigation("Children");
+
+                    b.Navigation("Payments");
+
+                    b.Navigation("PlanPurchases");
+
+                    b.Navigation("Transactions");
+
+                    b.Navigation("creditWallet")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NomoAI.API.Domain.Entities.Payment", b =>
+                {
+                    b.Navigation("PaymentQuickLinks");
                 });
 #pragma warning restore 612, 618
         }

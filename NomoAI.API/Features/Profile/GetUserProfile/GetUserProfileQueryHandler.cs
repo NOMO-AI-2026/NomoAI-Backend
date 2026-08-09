@@ -42,7 +42,8 @@ namespace NomoAI.API.Features.Profile.GetUserProfile
                 {
                     YearsOfExperience = d.YearsOfExperience,
                     ClinicName = d.ClinicName,
-                    ProfessionalBio = d.ProfessionalBio
+                    ProfessionalBio = d.ProfessionalBio,
+                    AvailableMinutes = d.creditWallet.AvailableMinutes
                 })
                 .SingleOrDefaultAsync(cancellationToken);
 

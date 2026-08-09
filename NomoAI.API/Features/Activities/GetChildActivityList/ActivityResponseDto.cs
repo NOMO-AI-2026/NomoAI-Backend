@@ -20,5 +20,6 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
         /// <summary>True when the activity may still be used to start a session.</summary>
         [JsonPropertyName("canMakeSession")]
         public bool CanMakeSession { get; set; }
+        public bool canMakeSession { get; set; } = true;
     }
 }

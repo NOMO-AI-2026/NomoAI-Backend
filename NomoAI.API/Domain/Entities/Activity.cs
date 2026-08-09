@@ -20,6 +20,7 @@ namespace NomoAI.API.Domain.Entities
         /// </summary>
         public bool CanMakeSession { get; set; } = true;
 
+        public bool canMakeSession { get; set; } = true;
         public Children Child { get; set; } = null!;
         public ICollection<Session> Sessions { get; set; }
     }

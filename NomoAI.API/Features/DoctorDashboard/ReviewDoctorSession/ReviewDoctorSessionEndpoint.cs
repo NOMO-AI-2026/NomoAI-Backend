@@ -56,7 +56,8 @@ public sealed class ReviewDoctorSessionEndpoint : IEndpoint
                     sessionId,
                     userId,
                     request.Rating,
-                    request.Comment),
+                    request.Comment,
+                    request.repeatSession),
                 cancellationToken);
 
         return result.IsSuccess

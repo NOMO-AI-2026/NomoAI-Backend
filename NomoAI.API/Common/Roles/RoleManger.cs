@@ -13,11 +13,14 @@ namespace NomoAI.API.Common.Roles
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly AppDbContext dbContext;
-        public RoleManger(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager, AppDbContext dbContext)
+        private readonly IConfiguration _configuration;
+        public RoleManger(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager, 
+            AppDbContext dbContext , IConfiguration configuration)
         {
             _roleManager = roleManager;
             _userManager = userManager;
             this.dbContext = dbContext;
+            _configuration = configuration;
         }
 
         public async Task<bool> AddToRole(ApplicationUser user, UserRole userRole)
@@ -52,11 +55,20 @@ namespace NomoAI.API.Common.Roles
 
             if (userRole == UserRole.Doctor)
             {
-                dbContext.Add(
-                    new Doctor
-                    {
-                        UserId = user.Id
-                    });
+                Doctor doctor = new Doctor
+                {
+                    UserId = user.Id
+                };
+                dbContext.Add(doctor);
+                await dbContext.SaveChangesAsync();
+
+                DoctorCreditWallet wallet = new DoctorCreditWallet
+                {
+                    DoctorId = doctor.Id,
+                    AvailableMinutes = _configuration.GetValue<int>("AppGeneralSettings:NumberOfFreeHours") * 60,
+                    UpdatedAtUtc = DateTime.UtcNow,
+                };
+                dbContext.Add(wallet);
             }
             else if (userRole == UserRole.Parent)
             {

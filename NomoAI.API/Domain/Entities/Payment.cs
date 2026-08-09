@@ -6,6 +6,8 @@ namespace NomoAI.API.Domain.Entities
     {
         public int DoctorId { get; set; }
 
+        public string PaymentMethodId {get;set;}
+
         public decimal Amount { get; set; }
 
         public MoneyCurrency Currency { get; set; } = MoneyCurrency.EGP;
@@ -19,6 +21,10 @@ namespace NomoAI.API.Domain.Entities
         public DateTime? PaidAtUtc { get; set; }
 
         public Doctor Doctor { get; set; }
+
+        public PaymentMethod paymentMethod {get; set;}
+
+        public ICollection<PaymentQuickLink> PaymentQuickLinks { get; set; }
 
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NomoAI.API.Persistence;
 
@@ -11,9 +12,11 @@ using NomoAI.API.Persistence;
 namespace NomoAI.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809070220_DoctorCreditWalletFilteredUniqueIndex")]
+    partial class DoctorCreditWalletFilteredUniqueIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -522,6 +525,9 @@ namespace NomoAI.API.Migrations
                     b.Property<int>("Minutes")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PlanId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PlanPurchaseId")
                         .HasColumnType("int");
 
@@ -535,7 +541,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasIndex("DoctorId");
 
-                    b.HasIndex("PlanPurchaseId");
+                    b.HasIndex("PlanId");
 
                     b.HasIndex("SessionId");
 
@@ -1295,7 +1301,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasOne("NomoAI.API.Domain.Entities.DoctorPlanPurchase", "Plan")
                         .WithMany()
-                        .HasForeignKey("PlanPurchaseId");
+                        .HasForeignKey("PlanId");
 
                     b.HasOne("NomoAI.API.Domain.Entities.Session", "Session")
                         .WithMany()

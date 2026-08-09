@@ -1,4 +1,5 @@
 ﻿using NomoAI.API.Domain.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace NomoAI.API.Domain.Entities
 {
@@ -15,8 +16,8 @@ namespace NomoAI.API.Domain.Entities
         public int? PlanPurchaseId { get; set; }
 
         public int? SessionId { get; set; }
-
-        public DoctorPlanPurchase? Plan { get; set; }
+        [ForeignKey(nameof(PlanPurchaseId))]
+        public DoctorPlanPurchase? Plan { get; set; } 
 
         public Session? Session { get; set; }
 

@@ -108,6 +108,13 @@ public sealed class RegisterUserHandler
             await _roleManger.AddToRole(
                 user,
                 request.Role);
+            if(request.Role == UserRole.Doctor)
+            {
+                DoctorCreditWallet wallet = new DoctorCreditWallet
+                {
+                   
+                };
+            }
 
             await _dbContext.SaveChangesAsync(
                 cancellationToken);

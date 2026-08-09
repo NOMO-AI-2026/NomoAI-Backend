@@ -38,9 +38,16 @@ namespace NomoAI.API.Infrastructure.PayMob.Services
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await httpClient.PostAsync("/api/ecommerce/payment-links", content);
-            response.EnsureSuccessStatusCode();
-
             var responseString = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine(
+                    $"PayMob CreateQuickLink failed. Status={(int)response.StatusCode} {response.StatusCode}. Body={responseString}");
+
+                throw new InvalidOperationException(
+                    $"PayMob CreateQuickLink failed with status {(int)response.StatusCode}: {responseString}");
+            }
 
             try
             {

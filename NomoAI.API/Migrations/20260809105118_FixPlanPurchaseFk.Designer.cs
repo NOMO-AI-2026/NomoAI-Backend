@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NomoAI.API.Persistence;
 
@@ -11,9 +12,11 @@ using NomoAI.API.Persistence;
 namespace NomoAI.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809105118_FixPlanPurchaseFk")]
+    partial class FixPlanPurchaseFk
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -180,9 +183,6 @@ namespace NomoAI.API.Migrations
                         .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("canMakeSession")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
@@ -1085,8 +1085,7 @@ namespace NomoAI.API.Migrations
 
                     b.Property<string>("AISummary")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("AverageScore")
                         .HasColumnType("decimal(18,2)");
@@ -1097,64 +1096,15 @@ namespace NomoAI.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("DoctorReviewNote")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("DoctorReviewRecommended")
-                        .HasColumnType("bit");
-
-                    b.Property<double?>("DurationSeconds")
-                        .HasColumnType("float");
-
-                    b.Property<string>("FinalAdaptiveAction")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<decimal?>("FinalOverallScore")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("FirstOverallScore")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTimeOffset?>("GeneratedAt")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<decimal>("ImprovementPercentage")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("InterventionCount")
-                        .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("ModelName")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<int>("NoSpeechAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Outcome")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("RawResponseJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Recommendations")
                         .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("RulesVersion")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("ScoreTrend")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("SessionId")
                         .HasColumnType("int");
@@ -1166,15 +1116,8 @@ namespace NomoAI.API.Migrations
                     b.Property<int>("SuccessfulAttempts")
                         .HasColumnType("int");
 
-                    b.Property<string>("SummaryGenerationMode")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
                     b.Property<int>("TotalAttempts")
                         .HasColumnType("int");
-
-                    b.Property<bool>("UsedFallback")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Weaknesses")
                         .IsRequired()
@@ -1182,9 +1125,7 @@ namespace NomoAI.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SessionId")
-                        .IsUnique()
-                        .HasFilter("[IsDeleted] = 0");
+                    b.HasIndex("SessionId");
 
                     b.ToTable("SessionSummaries");
                 });
@@ -1512,7 +1453,7 @@ namespace NomoAI.API.Migrations
                     b.HasOne("NomoAI.API.Domain.Entities.Session", "session")
                         .WithMany()
                         .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("session");

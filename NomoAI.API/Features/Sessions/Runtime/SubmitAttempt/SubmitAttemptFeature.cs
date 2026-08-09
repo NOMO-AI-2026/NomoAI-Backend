@@ -8,6 +8,7 @@ using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime.StartSession;
+using NomoAI.API.Features.Sessions.Summary;
 using NomoAI.API.Infrastructure.Ai;
 using NomoAI.API.Persistence;
 using NomoDoc.Domain.Entities;
@@ -255,9 +256,13 @@ internal sealed class SubmitAttemptCommandHandler
                 _db,
                 session.ActivityId,
                 cancellationToken);
+            await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
+                _db,
+                session,
+                cancellationToken);
         }
 
-        // One SaveChanges for attempt + transcript + evaluation + session cursor (+ activity gate).
+        // One SaveChanges for attempt + transcript + evaluation + session cursor (+ activity gate + summary history).
         await _db.SaveChangesAsync(cancellationToken);
 
         (string? audioBase64, string? audioContentType) = await feedbackAudioTask;

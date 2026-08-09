@@ -169,6 +169,29 @@ namespace NomoAI.API.Persistence
             {
                 entity.ToTable("DoctorTransaction");
             });
+            builder.Entity<SessionSummary>(entity =>
+            {
+                entity
+                    .HasOne(summary => summary.session)
+                    .WithMany()
+                    .HasForeignKey(summary => summary.SessionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(summary => summary.AISummary).HasMaxLength(2000);
+                entity.Property(summary => summary.Recommendations).HasMaxLength(1000);
+                entity.Property(summary => summary.DoctorReviewNote).HasMaxLength(500);
+                entity.Property(summary => summary.Outcome).HasMaxLength(64);
+                entity.Property(summary => summary.ScoreTrend).HasMaxLength(32);
+                entity.Property(summary => summary.FinalAdaptiveAction).HasMaxLength(64);
+                entity.Property(summary => summary.SummaryGenerationMode).HasMaxLength(64);
+                entity.Property(summary => summary.ModelName).HasMaxLength(128);
+                entity.Property(summary => summary.RulesVersion).HasMaxLength(128);
+
+                entity
+                    .HasIndex(summary => summary.SessionId)
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+            });
         }
     }
 }

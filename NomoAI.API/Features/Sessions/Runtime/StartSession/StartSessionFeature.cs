@@ -105,7 +105,7 @@ internal sealed class StartSessionCommandHandler
             Age = age,
             Language = language,
             DurationMinutes = request.DurationMinutes ?? 15,
-            MaxSteps = request.MaxSteps ?? 6
+            MaxSteps = request.MaxSteps ?? 8
         };
 
         Result<AiSessionPlanV2Response> planResult =
@@ -183,7 +183,8 @@ internal sealed class StartSessionCommandHandler
     internal static SessionRuntimeStepDto MapStep(AiSessionStepDto step, int attemptNumber)
     {
         bool planExpectsResponse = SessionStepTypes.ExpectsChildResponse(step.Type, step.ExpectedChildAction);
-        int maximumAttempts = Math.Max(1, step.MaximumAttempts);
+        int maximumAttempts = SessionStepTypes.EffectiveMaximumAttempts(
+            step.Type, step.ExpectedChildAction, step.MaximumAttempts);
 
         return new SessionRuntimeStepDto
         {

@@ -13,6 +13,8 @@ namespace NomoAI.API.Domain.Entities
         public ActivityTargetType ActivityTarget { get; set; }
         public string Content { get; set; } = string.Empty;
         public int EstimatedDurationMinutes { get; set; }
+
+        public bool canMakeSession { get; set; } = true;
         public Children Child { get; set; } = null!;
         public ICollection<Session> Sessions { get; set; }
     }

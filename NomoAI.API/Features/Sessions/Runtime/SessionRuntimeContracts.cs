@@ -160,6 +160,23 @@ internal static class SessionStepTypes
         string action = expectedChildAction ?? string.Empty;
         return SpeakingKeywords.Any(keyword => action.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Child-response steps get a generous retry floor so short AI plans
+    /// (often maximumAttempts=2) do not end the therapy turn too early.
+    /// </summary>
+    public const int MinimumSpeakingAttempts = 5;
+
+    public static int EffectiveMaximumAttempts(string stepType, string expectedChildAction, int plannedMaximum)
+    {
+        int capped = Math.Max(1, plannedMaximum);
+        if (ExpectsChildResponse(stepType, expectedChildAction))
+        {
+            return Math.Max(MinimumSpeakingAttempts, capped);
+        }
+
+        return capped;
+    }
 }
 
 /// <summary>

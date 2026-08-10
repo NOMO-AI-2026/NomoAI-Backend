@@ -49,6 +49,7 @@ public static class CreateActivityEndpoint
             request.ActivityTarget,
             request.Content,
             request.EstimatedDurationMinutes,
+            request.CanMakeSession,
             doctorUserId);
 
         Result<CreateActivityResponse> result =

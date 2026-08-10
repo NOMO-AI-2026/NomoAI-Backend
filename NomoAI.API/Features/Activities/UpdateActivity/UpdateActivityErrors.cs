@@ -28,4 +28,9 @@ public static class UpdateActivityErrors
         "Activities.Update.UpdateFailed",
         "The activity could not be updated.",
         StatusCodes.Status409Conflict);
+
+    public static readonly Error InsufficientCredit = new(
+       "DoctorDashboard.InsufficientCredit",
+       "You do not have enough credits to repeat this session.",
+       StatusCodes.Status400BadRequest);
 }

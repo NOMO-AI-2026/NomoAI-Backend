@@ -23,4 +23,9 @@ public static class CreateActivityErrors
         "Activities.ChildDoesNotBelongToDoctor",
         "You do not have permission to create an activity for this child.",
         StatusCodes.Status403Forbidden);
+
+    public static readonly Error InsufficientCredit = new (
+        "DoctorDashboard.InsufficientCredit",
+        "You do not have enough credits to repeat this session.",
+        StatusCodes.Status400BadRequest);
 }

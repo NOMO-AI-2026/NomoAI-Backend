@@ -6,6 +6,7 @@ using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime;
+using NomoAI.API.Migrations;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Sessions.Summary.GetChildSessionHistory;
@@ -26,6 +27,18 @@ public sealed record ChildSessionHistoryItemDto
     public int? TotalAttempts { get; init; }
     public int? SuccessfulAttempts { get; init; }
     public decimal? AverageScore { get; init; }
+
+    public bool IsDoctorReviewed { get; set; } = false;
+
+    /// <summary>
+    /// Doctor star rating (1–5). Null until the doctor reviews the session.
+    /// </summary>
+    public int? DoctorRating { get; set; }
+
+    /// <summary>
+    /// Doctor review comment. Null until the doctor reviews the session.
+    /// </summary>
+    public string? DoctorComment { get; set; }
 }
 
 public sealed record GetChildSessionHistoryQuery(int ChildId, string UserId)
@@ -94,7 +107,10 @@ internal sealed class GetChildSessionHistoryQueryHandler
                     ShortSummary = summary != null ? summary.AISummary : null,
                     TotalAttempts = summary != null ? (int?)summary.TotalAttempts : null,
                     SuccessfulAttempts = summary != null ? (int?)summary.SuccessfulAttempts : null,
-                    AverageScore = summary != null ? (decimal?)summary.AverageScore : null
+                    AverageScore = summary != null ? (decimal?)summary.AverageScore : null,
+                    IsDoctorReviewed = x.session.IsDoctorReviewed,
+                    DoctorRating = x.session.DoctorRating,
+                    DoctorComment = x.session.DoctorComment
                 })
             .OrderByDescending(row => row.EndedAt ?? row.StartedAt)
             .Take(50)
@@ -118,7 +134,10 @@ internal sealed class GetChildSessionHistoryQueryHandler
                 ShortSummary = row.ShortSummary,
                 TotalAttempts = row.TotalAttempts,
                 SuccessfulAttempts = row.SuccessfulAttempts,
-                AverageScore = row.AverageScore
+                AverageScore = row.AverageScore,
+                IsDoctorReviewed = row.IsDoctorReviewed,
+                DoctorRating = row.DoctorRating,
+                DoctorComment = row.DoctorComment
             })
             .ToArray();
 

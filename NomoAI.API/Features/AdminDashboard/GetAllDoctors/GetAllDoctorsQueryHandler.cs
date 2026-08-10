@@ -25,7 +25,9 @@ namespace NomoAI.API.Features.AdminDashboard.GetAllDoctors
                     FullName = d.User.Fullname,
                     Email = d.User.Email ?? string.Empty,
                     IsApproved = d.IsApproved,
-
+                    YearsOfExperience = d.YearsOfExperience,
+                    ClinicName = d.ClinicName,
+                    ProfessionalBio = d.ProfessionalBio,
                 })
                 .OrderBy(d => d.FullName)
                 .AsQueryable();

@@ -6,37 +6,28 @@ using NomoAI.API.Common.Email;
 using NomoAI.API.Common.Enums;
 using NomoAI.API.Common.Roles;
 using NomoAI.API.Domain.Entities;
-using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Register_User;
-
 
 public sealed class RegisterUserHandler
     : IRequestHandler<RegisterUserCommand, Result<RegisterResponseDto>>
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly RoleManager<IdentityRole> _roleManager;
-    private readonly AppDbContext _dbContext;
     private readonly IEmailOtpDispatcher _emailOtpDispatcher;
     private readonly IRoleManger _roleManger;
     private readonly ILogger<RegisterUserHandler> _logger;
 
     public RegisterUserHandler(
         UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager,
-        AppDbContext dbContext,
         IEmailOtpDispatcher emailOtpDispatcher,
         IRoleManger roleManger,
         ILogger<RegisterUserHandler> logger)
     {
         _userManager = userManager;
-        _roleManager = roleManager;
-        _dbContext = dbContext;
         _emailOtpDispatcher = emailOtpDispatcher;
         _roleManger = roleManger;
         _logger = logger;
     }
-
 
     public async Task<Result<RegisterResponseDto>> Handle(
         RegisterUserCommand request,
@@ -47,6 +38,14 @@ public sealed class RegisterUserHandler
 
         ApplicationUser? existingUser =
             await _userManager.FindByEmailAsync(email);
+
+        DoctorRegistrationProfile? doctorProfile =
+            request.Role == UserRole.Doctor
+                ? new DoctorRegistrationProfile(
+                    request.YearsOfExperience,
+                    request.ClinicName,
+                    request.ProfessionalBio)
+                : null;
 
         if (existingUser != null)
         {
@@ -63,7 +62,7 @@ public sealed class RegisterUserHandler
 
             await _userManager.RemovePasswordAsync(existingUser);
             await _userManager.AddPasswordAsync(existingUser, request.Password);
-            await _roleManger.AddToRole(existingUser, request.Role);
+            await _roleManger.AddToRole(existingUser, request.Role, doctorProfile);
             existingUser.EmailConfirmed = false;
             await _userManager.UpdateAsync(existingUser);
 
@@ -78,11 +77,9 @@ public sealed class RegisterUserHandler
                     FullName = existingUser.Fullname,
                     Username = existingUser.Email ?? email
                 });
-
         }
         else
         {
-
             var user = new ApplicationUser
             {
                 UserName = email,
@@ -104,21 +101,10 @@ public sealed class RegisterUserHandler
                     AuthErrors.UserRegistrationFailed);
             }
 
-
             await _roleManger.AddToRole(
                 user,
-                request.Role);
-            if(request.Role == UserRole.Doctor)
-            {
-                DoctorCreditWallet wallet = new DoctorCreditWallet
-                {
-                   
-                };
-            }
-
-            await _dbContext.SaveChangesAsync(
-                cancellationToken);
-
+                request.Role,
+                doctorProfile);
 
             await TrySendConfirmationOtpAsync(
                 user,

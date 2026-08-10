@@ -1,21 +1,22 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Enums;
 using NomoAI.API.Domain.Entities;
-using NomoAI.API.Features.Auth;
-using NomoAI.API.Features.Auth.Register_User;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Common.Roles
 {
-    public class RoleManger:IRoleManger
+    public class RoleManger : IRoleManger
     {
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly AppDbContext dbContext;
         private readonly IConfiguration _configuration;
-        public RoleManger(RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager, 
-            AppDbContext dbContext , IConfiguration configuration)
+
+        public RoleManger(
+            RoleManager<IdentityRole> roleManager,
+            UserManager<ApplicationUser> userManager,
+            AppDbContext dbContext,
+            IConfiguration configuration)
         {
             _roleManager = roleManager;
             _userManager = userManager;
@@ -23,7 +24,10 @@ namespace NomoAI.API.Common.Roles
             _configuration = configuration;
         }
 
-        public async Task<bool> AddToRole(ApplicationUser user, UserRole userRole)
+        public async Task<bool> AddToRole(
+            ApplicationUser user,
+            UserRole userRole,
+            DoctorRegistrationProfile? doctorProfile = null)
         {
             string roleName = userRole.GetRoleName();
 
@@ -57,7 +61,11 @@ namespace NomoAI.API.Common.Roles
             {
                 Doctor doctor = new Doctor
                 {
-                    UserId = user.Id
+                    UserId = user.Id,
+                    YearsOfExperience = doctorProfile?.YearsOfExperience,
+                    ClinicName = doctorProfile?.ClinicName,
+                    ProfessionalBio = doctorProfile?.ProfessionalBio,
+                    IsApproved = false
                 };
                 dbContext.Add(doctor);
                 await dbContext.SaveChangesAsync();
@@ -95,6 +103,5 @@ namespace NomoAI.API.Common.Roles
             }
             else return false;
         }
-        
     }
 }

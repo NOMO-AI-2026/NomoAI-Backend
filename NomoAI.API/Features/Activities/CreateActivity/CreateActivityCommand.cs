@@ -9,5 +9,6 @@ public sealed record CreateActivityCommand(
     ActivityTargetType ActivityTarget,
     string Content,
     int EstimatedDurationMinutes,
+    bool CanMakeSession,
     string DoctorUserId)
     : IRequest<Result<CreateActivityResponse>>;

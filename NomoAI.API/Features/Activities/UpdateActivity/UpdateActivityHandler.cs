@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Entities;
+using NomoAI.API.Features.Activities.CreateActivity;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Activities.UpdateActivity;
@@ -48,6 +49,7 @@ internal sealed class UpdateActivityHandler
                 UpdateActivityErrors.DoctorNotApproved);
         }
 
+
         var activity = await _dbContext.Activities
             .AsNoTracking()
             .Where(activity =>
@@ -56,7 +58,9 @@ internal sealed class UpdateActivityHandler
             .Select(activity => new
             {
                 activity.Id,
-                activity.ChildId
+                activity.ChildId,
+                activity.CanMakeSession,
+                activity.EstimatedDurationMinutes
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -66,6 +70,32 @@ internal sealed class UpdateActivityHandler
                 UpdateActivityErrors.ActivityNotFound);
         }
 
+        if (request.CanMakeSession == true && activity.CanMakeSession == false)
+        {
+            int avialableMinutes = getDoctorAvailableMinutes(doctor.Id);
+
+            int estimatedMinutes = getDoctorEstimatedMinutes(doctor.Id);
+
+            estimatedMinutes += request.EstimatedDurationMinutes;
+
+            if (estimatedMinutes > avialableMinutes)
+            {
+                return Result.Failure<UpdateActivityResponse>(UpdateActivityErrors.InsufficientCredit);
+            }
+        }
+        if(request.CanMakeSession == true && activity.EstimatedDurationMinutes < request.EstimatedDurationMinutes)
+        {
+            int avialableMinutes = getDoctorAvailableMinutes(doctor.Id);
+
+            int estimatedMinutes = getDoctorEstimatedMinutes(doctor.Id);
+
+            estimatedMinutes += (request.EstimatedDurationMinutes - activity.EstimatedDurationMinutes);
+
+            if (estimatedMinutes > avialableMinutes)
+            {
+                return Result.Failure<UpdateActivityResponse>(UpdateActivityErrors.InsufficientCredit);
+            }
+        }
         bool childBelongsToDoctor =
             await _dbContext.Children
                 .AsNoTracking()
@@ -123,5 +153,20 @@ internal sealed class UpdateActivityHandler
             "Activity updated successfully.");
 
         return Result.Success(response);
+    }
+    private int getDoctorAvailableMinutes(int doctorId)
+    {
+        int avialableMinutes = _dbContext.DoctorCreditWallets.Where(dc => dc.DoctorId == doctorId)
+                   .Select(dc => dc.AvailableMinutes)
+                   .FirstOrDefault();
+        return avialableMinutes;
+    }
+    private int getDoctorEstimatedMinutes(int doctorId)
+    {
+        int estimatedMinutes = _dbContext.Activities
+            .Where(a => !a.IsDeleted && a.CanMakeSession && a.Child.DoctorId == doctorId)
+            .Select(s => s.EstimatedDurationMinutes)
+            .Sum();
+        return estimatedMinutes;
     }
 }

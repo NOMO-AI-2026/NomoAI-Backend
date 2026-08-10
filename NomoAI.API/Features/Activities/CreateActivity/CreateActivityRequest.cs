@@ -6,4 +6,5 @@ public sealed record CreateActivityRequest(
     int ChildId,
     ActivityTargetType ActivityTarget,
     string Content,
-    int EstimatedDurationMinutes);
+    int EstimatedDurationMinutes,
+    bool CanMakeSession);

@@ -46,6 +46,24 @@ internal sealed class CreateActivityHandler
             return Result.Failure<CreateActivityResponse>(
                 CreateActivityErrors.DoctorNotApproved);
         }
+        if (request.CanMakeSession == true)
+        {
+            int avialableMinutes = await _dbContext.DoctorCreditWallets.Where(dc => dc.DoctorId == doctor.Id)
+                   .Select(dc => dc.AvailableMinutes)
+                   .FirstOrDefaultAsync(cancellationToken);
+
+            int estimatedMinutes = await _dbContext.Activities
+                .Where(a => !a.IsDeleted && a.CanMakeSession && a.Child.DoctorId == doctor.Id)
+                .Select(s => s.EstimatedDurationMinutes)
+                .SumAsync(cancellationToken);
+
+            estimatedMinutes += request.EstimatedDurationMinutes;
+
+            if (estimatedMinutes > avialableMinutes)
+            {
+                return Result.Failure<CreateActivityResponse>(CreateActivityErrors.InsufficientCredit);
+            }
+        }
 
         bool childExists = await _dbContext.Children
             .AsNoTracking()
@@ -84,7 +102,7 @@ internal sealed class CreateActivityHandler
                 Content = request.Content.Trim(),
                 EstimatedDurationMinutes =
                     request.EstimatedDurationMinutes,
-                CanMakeSession = true
+                CanMakeSession = request.CanMakeSession
             };
 
         _dbContext.Activities.Add(activity);

@@ -18,4 +18,9 @@ public static class DoctorSessionReviewErrors
         "DoctorDashboard.SessionAlreadyReviewed",
         "This session has already been reviewed.",
         StatusCodes.Status409Conflict);
+
+    public static readonly Error InsufficientCredit = new(
+        "DoctorDashboard.InsufficientCredit",
+        "You do not have enough credits to repeat this session.",
+        StatusCodes.Status400BadRequest);
 }

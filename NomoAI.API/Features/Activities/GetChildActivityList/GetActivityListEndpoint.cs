@@ -11,7 +11,7 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
             app.MapGet("api/children/{childId:int}/activities", async (
                 int childId,
                 IMediator mediator,
-                bool onlyAvailableForSession = false) =>
+                bool? onlyAvailableForSession) =>
             {
                 var query = new GetChildActivityListQuery(childId, onlyAvailableForSession);
                 var result = await mediator.Send(query);

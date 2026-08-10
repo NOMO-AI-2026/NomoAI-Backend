@@ -69,11 +69,6 @@ internal sealed class ReviewDoctorSessionHandler
                 DoctorSessionReviewErrors.SessionNotCompleted);
         }
 
-        if (session.IsDoctorReviewed)
-        {
-            return Result.Failure<ReviewDoctorSessionResponse>(
-                DoctorSessionReviewErrors.SessionAlreadyReviewed);
-        }
 
         string trimmedComment = request.Comment.Trim();
         DateTime reviewedAtUtc = DateTime.UtcNow;
@@ -81,6 +76,26 @@ internal sealed class ReviewDoctorSessionHandler
         session.DoctorRating = request.Rating;
         session.DoctorComment = trimmedComment;
         session.IsDoctorReviewed = true;
+        if(request.repeatSession  != session.Activity.CanMakeSession && request.repeatSession ==  true)
+        {
+            int avialableMinutes = await _dbContext.DoctorCreditWallets.Where(dc => dc.DoctorId == doctor.Id)
+                .Select(dc => dc.AvailableMinutes)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            int estimatedMinutes = await _dbContext.Activities
+                .Where(a => !a.IsDeleted && a.CanMakeSession && a.Child.DoctorId == doctor.Id)
+                .Select(s => s.EstimatedDurationMinutes)
+                .SumAsync(cancellationToken);
+
+            estimatedMinutes += session.Activity.EstimatedDurationMinutes;
+
+            if (avialableMinutes - estimatedMinutes < 0)
+            {
+                return Result.Failure<ReviewDoctorSessionResponse>(
+                    DoctorSessionReviewErrors.InsufficientCredit);
+            }
+        }
+
         session.Activity.CanMakeSession = request.repeatSession;
 
         await _dbContext.SaveChangesAsync(cancellationToken);

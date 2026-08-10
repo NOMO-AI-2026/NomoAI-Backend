@@ -18,13 +18,10 @@ namespace NomoAI.API.Features.Activities.GetChildActivityList
         {
             IQueryable<Domain.Entities.Activity> query = _db.Activities
                 .AsNoTracking()
-                .Where(a => !a.IsDeleted && a.ChildId == request.ChildId);
+                .Where(a => !a.IsDeleted && a.ChildId == request.ChildId && (request.OnlyAvailableForSession==null ||
+                request.OnlyAvailableForSession==a.CanMakeSession));
 
             // Session-start picker only — manage/history UIs keep seeing used activities.
-            if (request.OnlyAvailableForSession)
-            {
-                query = query.Where(a => a.CanMakeSession);
-            }
 
             var activities = await query
                 .Select(a => new ActivityResponseDto

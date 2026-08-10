@@ -83,6 +83,53 @@ public sealed class EmailTemplateBuilder : IEmailTemplateBuilder
                 bodyContent));
     }
 
+    public EmailMessage BuildDoctorApprovedNotification(
+        string? displayName = null)
+    {
+        string greetingHtml =
+            string.IsNullOrWhiteSpace(displayName)
+                ? """
+                    <p style="
+                        color:#374151;
+                        line-height:1.7;">
+                        Hello,
+                    </p>
+                    """
+                : $"""
+                    <p style="
+                        color:#374151;
+                        line-height:1.7;">
+                        Hello {WebUtility.HtmlEncode(displayName.Trim())},
+                    </p>
+                    """;
+
+        string bodyContent = $"""
+            {greetingHtml}
+
+            <p style="
+                color:#374151;
+                line-height:1.7;">
+                An administrator has approved your NomoAI
+                doctor account. You can now sign in and
+                use the NomoAI system.
+            </p>
+
+            <p style="
+                color:#6b7280;
+                font-size:14px;
+                line-height:1.6;">
+                If you did not register as a doctor on
+                NomoAI, you can safely ignore this email.
+            </p>
+            """;
+
+        return new EmailMessage(
+            "Your NomoAI doctor account has been approved",
+            WrapInLayout(
+                "Doctor account approved",
+                bodyContent));
+    }
+
     private static EmailMessage BuildConfirmEmailMessage(
         string encodedOtp,
         string encodedExpiration)

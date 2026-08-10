@@ -12,4 +12,7 @@ public interface IEmailTemplateBuilder
 
     EmailMessage BuildEmailChangedNotification(
         string newEmail);
+
+    EmailMessage BuildDoctorApprovedNotification(
+        string? displayName = null);
 }

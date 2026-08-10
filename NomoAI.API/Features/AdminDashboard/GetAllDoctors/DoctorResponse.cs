@@ -10,6 +10,10 @@
         
         public bool IsApproved { get; set; }
 
+        public int? YearsOfExperience { get; set; }
 
+        public string? ClinicName { get; set; }
+
+        public string? ProfessionalBio { get; set; }
     }
 }

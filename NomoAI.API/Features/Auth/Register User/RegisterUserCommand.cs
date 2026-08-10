@@ -19,5 +19,11 @@ namespace NomoAI.API.Features.Auth.Register_User
         public required Gender Gender { get; set; }
 
         public UserRole Role { get; set; }
+
+        public int? YearsOfExperience { get; set; }
+
+        public string? ClinicName { get; set; }
+
+        public string? ProfessionalBio { get; set; }
     }
 }

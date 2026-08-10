@@ -21,5 +21,20 @@ namespace NomoAI.API.Features.Auth.Register_User
         /// Doctor = 0, Parent = 1
         /// </summary>
         public UserRole Role { get; set; }
+
+        /// <summary>
+        /// Optional. Used only when Role is Doctor; ignored for Parent.
+        /// </summary>
+        public int? YearsOfExperience { get; set; }
+
+        /// <summary>
+        /// Optional. Used only when Role is Doctor; ignored for Parent.
+        /// </summary>
+        public string? ClinicName { get; set; }
+
+        /// <summary>
+        /// Optional. Used only when Role is Doctor; ignored for Parent.
+        /// </summary>
+        public string? ProfessionalBio { get; set; }
     }
 }

@@ -24,7 +24,10 @@ namespace NomoAI.API.Features.Auth.Register_User
                         Gender = request.Gender,
                         Age = request.Age,
                         Role = request.Role,
-                        PhoneNumber = request.PhoneNumber
+                        PhoneNumber = request.PhoneNumber,
+                        YearsOfExperience = request.YearsOfExperience,
+                        ClinicName = request.ClinicName,
+                        ProfessionalBio = request.ProfessionalBio
                     };
 
                     var result = await mediator.Send(command, cancellationToken);

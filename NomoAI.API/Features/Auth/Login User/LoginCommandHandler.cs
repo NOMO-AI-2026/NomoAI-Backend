@@ -1,8 +1,10 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
+using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Login_User
 {
@@ -11,15 +13,18 @@ namespace NomoAI.API.Features.Auth.Login_User
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IJwtService _jwtTokenService;
         private readonly ILogger<LoginCommandHandler> _logger;
+        private readonly AppDbContext _dbContext;
 
         public LoginCommandHandler(
             UserManager<ApplicationUser> userManager,
             IJwtService jwtTokenService,
+            AppDbContext dbContext,
             ILogger<LoginCommandHandler> logger)
         {
             _userManager = userManager;
             _jwtTokenService = jwtTokenService;
             _logger = logger;
+            _dbContext = dbContext;
         }
 
         public async Task<Result<LoginResponseDto>> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -40,14 +45,27 @@ namespace NomoAI.API.Features.Auth.Login_User
                 return Result.Failure<LoginResponseDto>(AuthErrors.InvalidCredentials);
             }
 
-            //if (!user.EmailConfirmed)
-            //{
-            //    return Result.Failure<LoginResponseDto>(AuthErrors.EmailNotConfirmed);
-            //}
+            if (!user.EmailConfirmed)
+            {
+                return Result.Failure<LoginResponseDto>(AuthErrors.EmailNotConfirmed);
+            }
+            var roles = await _userManager.GetRolesAsync(user);
+            string role = roles.FirstOrDefault();
+
+            if(role == "Doctor")
+            {
+                bool isApproved = await _dbContext.Doctor
+                    .Where(d => d.UserId == user.Id && !d.IsDeleted)
+                    .Select(d => d.IsApproved)
+                    .FirstOrDefaultAsync();
+                if (!isApproved)
+                {
+                    return Result.Failure<LoginResponseDto>(AuthErrors.DoctorNotApproved);
+                }
+            }
 
             await _userManager.ResetAccessFailedCountAsync(user);
 
-            var roles = await _userManager.GetRolesAsync(user);
 
             var (token, expiration) = await _jwtTokenService.GenerateTokenAsync(user);
            

@@ -1,25 +1,22 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata.Conventions;
-using NomoAI.API.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace NomoAI.API.Domain.Entities
 {
-    public class SessionAttempts:BaseEntity<int>    
+    public class SessionAttempts : BaseEntity<int>
     {
-
         public int SessionId { get; set; }
 
-        public  int AttemptNumber { get; set; }
+        public int AttemptNumber { get; set; }
 
-        /// <summary>Nullable: audio may not be persisted to storage for every attempt.</summary>
+        /// <summary>
+        /// Stable API path/URL for the child's attempt audio (not a temp upload path).
+        /// </summary>
         public string? AudioUrl { get; set; }
 
+        /// <summary>Raw child attempt audio bytes persisted for doctor review.</summary>
+        public byte[]? AudioContent { get; set; }
+
+        /// <summary>MIME type of <see cref="AudioContent"/> (e.g. audio/webm).</summary>
+        public string? AudioContentType { get; set; }
+
         public Session Session { get; set; } = null!;
-
-
     }
 }

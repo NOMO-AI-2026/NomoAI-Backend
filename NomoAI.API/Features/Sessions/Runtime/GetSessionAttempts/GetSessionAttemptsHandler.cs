@@ -34,17 +34,18 @@ internal sealed class GetSessionAttemptsHandler
             return Result.Failure<GetSessionAttemptsResponse>(SessionRuntimeErrors.Forbidden);
         }
 
-        List<SessionAttemptItemResponse> attempts = await _db.SessionAttempts
+        var rows = await _db.SessionAttempts
             .AsNoTracking()
             .Where(a => a.SessionId == session.Id && !a.IsDeleted)
             .OrderBy(a => a.AttemptNumber)
             .ThenBy(a => a.Id)
-            .Select(a => new SessionAttemptItemResponse
+            .Select(a => new
             {
-                AttemptId = a.Id,
-                AttemptNumber = a.AttemptNumber,
-                AudioUrl = a.AudioUrl,
-                CreatedAt = a.CreatedAt,
+                a.Id,
+                a.AttemptNumber,
+                a.AudioUrl,
+                HasAudio = a.AudioContent != null,
+                a.CreatedAt,
                 Evaluation = _db.AttemptEvaluations
                     .Where(e => e.AttemptId == a.Id && !e.IsDeleted)
                     .Select(e => new SessionAttemptEvaluationResponse
@@ -76,6 +77,22 @@ internal sealed class GetSessionAttemptsHandler
                     .FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
+
+        List<SessionAttemptItemResponse> attempts = rows
+            .Select(a => new SessionAttemptItemResponse
+            {
+                AttemptId = a.Id,
+                AttemptNumber = a.AttemptNumber,
+                AudioUrl = !string.IsNullOrWhiteSpace(a.AudioUrl)
+                    ? a.AudioUrl
+                    : a.HasAudio
+                        ? AttemptAudioUrl.BuildRelativePath(session.Id, a.Id)
+                        : null,
+                CreatedAt = a.CreatedAt,
+                Evaluation = a.Evaluation,
+                Transcription = a.Transcription
+            })
+            .ToList();
 
         return Result.Success(new GetSessionAttemptsResponse
         {

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Domain.Entities;
 using NomoDoc.Domain.Entities;
@@ -118,6 +118,9 @@ namespace NomoAI.API.Persistence
                     .WithMany()
                     .HasForeignKey(attempt => attempt.SessionId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(attempt => attempt.AudioContentType)
+                    .HasMaxLength(100);
 
                 // Filtered unique index (soft-deleted attempts do not block re-attempt numbering).
                 entity

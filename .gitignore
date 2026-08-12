@@ -377,3 +377,5 @@ scripts/plan-*.json
 publish-eb/
 nomoai-api-eb.zip
 nomoai-api-eb-*.zip
+nomoai-api-v2.zip
+nomoai-api-v2-*.zip

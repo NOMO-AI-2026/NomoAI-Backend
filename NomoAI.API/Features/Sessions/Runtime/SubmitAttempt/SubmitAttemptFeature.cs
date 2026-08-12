@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Ai.Contracts;
+using NomoAI.API.Common.Options;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime.StartSession;
@@ -102,11 +103,16 @@ internal sealed class SubmitAttemptCommandHandler
 
     private readonly AppDbContext _db;
     private readonly IAiCoreClient _aiCoreClient;
+    private readonly PublicApiOptions _publicApiOptions;
 
-    public SubmitAttemptCommandHandler(AppDbContext db, IAiCoreClient aiCoreClient)
+    public SubmitAttemptCommandHandler(
+        AppDbContext db,
+        IAiCoreClient aiCoreClient,
+        IOptions<PublicApiOptions> publicApiOptions)
     {
         _db = db;
         _aiCoreClient = aiCoreClient;
+        _publicApiOptions = publicApiOptions.Value;
     }
 
     public async Task<Result<SessionRuntimeResponse>> Handle(
@@ -162,6 +168,18 @@ internal sealed class SubmitAttemptCommandHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.DuplicateAttempt);
         }
 
+        // Buffer before evaluate so the same child bytes can be sent to AI and persisted.
+        Result<byte[]> audioBytesResult = await ReadChildAudioBytesAsync(request, cancellationToken);
+        if (audioBytesResult.IsFailure)
+        {
+            return Result.Failure<SessionRuntimeResponse>(audioBytesResult.Error);
+        }
+
+        byte[] childAudioBytes = audioBytesResult.Value;
+        string audioContentType = string.IsNullOrWhiteSpace(request.ContentType)
+            ? "application/octet-stream"
+            : request.ContentType.Split(';')[0].Trim();
+
         (IReadOnlyList<double> previousScores, string? previousDecision, int consecutiveNoSpeechCount) =
             await LoadAttemptHistoryAsync(session, cancellationToken);
 
@@ -170,13 +188,12 @@ internal sealed class SubmitAttemptCommandHandler
         int effectiveMaxAttempts = SessionStepTypes.EffectiveMaximumAttempts(
             step.Type, step.ExpectedChildAction, step.MaximumAttempts);
 
+        await using var evaluateStream = new MemoryStream(childAudioBytes, writable: false);
         var aiRequest = new AiEvaluateAttemptV2Request
         {
-            AudioStream = request.AudioStream!,
+            AudioStream = evaluateStream,
             FileName = Path.GetFileName(request.FileName),
-            ContentType = string.IsNullOrWhiteSpace(request.ContentType)
-                ? "application/octet-stream"
-                : request.ContentType.Split(';')[0].Trim(),
+            ContentType = audioContentType,
             ActivityType = session.ActivityType ?? plan.ActivityType,
             Prompt = session.Prompt ?? plan.Prompt,
             SpeechLevel = session.SpeechLevel ?? string.Empty,
@@ -212,6 +229,8 @@ internal sealed class SubmitAttemptCommandHandler
         {
             SessionId = session.Id,
             AttemptNumber = globalAttemptNumber,
+            AudioContent = childAudioBytes,
+            AudioContentType = audioContentType,
             AudioUrl = null
         };
 
@@ -256,16 +275,23 @@ internal sealed class SubmitAttemptCommandHandler
                 _db,
                 session.ActivityId,
                 cancellationToken);
+            await DoctorSessionCreditDebiter.TryDebitForCompletedSessionAsync(
+                _db,
+                session,
+                cancellationToken);
             await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
                 _db,
                 session,
                 cancellationToken);
         }
 
-        // One SaveChanges for attempt + transcript + evaluation + session cursor (+ activity gate + summary history).
+        // Persist attempt + audio bytes first so we never store an AudioUrl without content.
         await _db.SaveChangesAsync(cancellationToken);
 
-        (string? audioBase64, string? audioContentType) = await feedbackAudioTask;
+        attempt.AudioUrl = AttemptAudioUrl.Build(session.Id, attempt.Id, _publicApiOptions.BaseUrl);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        (string? audioBase64, string? audioContentTypeResponse) = await feedbackAudioTask;
 
         var feedback = new SessionFeedbackDto
         {
@@ -284,11 +310,47 @@ internal sealed class SubmitAttemptCommandHandler
                 Matched = scores?.Matched ?? analysisScores?.Matched ?? false
             },
             AudioBase64 = audioBase64,
-            AudioContentType = audioContentType
+            AudioContentType = audioContentTypeResponse
         };
 
         SessionRuntimeResponse response = BuildResponse(session, plan, evaluation.AdaptiveDecision.Action, feedback);
         return Result.Success(response);
+    }
+
+    private static async Task<Result<byte[]>> ReadChildAudioBytesAsync(
+        SubmitAttemptCommand request,
+        CancellationToken cancellationToken)
+    {
+        if (request.AudioStream is null)
+        {
+            return Result.Failure<byte[]>(SessionRuntimeErrors.AudioRequired);
+        }
+
+        try
+        {
+            await using var buffer = new MemoryStream(
+                capacity: request.AudioLengthBytes > 0 && request.AudioLengthBytes <= int.MaxValue
+                    ? (int)request.AudioLengthBytes
+                    : 0);
+
+            await request.AudioStream.CopyToAsync(buffer, cancellationToken);
+            byte[] bytes = buffer.ToArray();
+
+            if (bytes.Length == 0)
+            {
+                return Result.Failure<byte[]>(SessionRuntimeErrors.AudioRequired);
+            }
+
+            return Result.Success(bytes);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return Result.Failure<byte[]>(SessionRuntimeErrors.AttemptAudioPersistFailed);
+        }
     }
 
     private async Task<(IReadOnlyList<double> PreviousScores, string? PreviousDecision, int ConsecutiveNoSpeechCount)>

@@ -64,6 +64,16 @@ public static class SessionRuntimeErrors
         "No avatar feedback is available for this attempt.",
         StatusCodes.Status404NotFound);
 
+    public static readonly Error AttemptAudioNotAvailable = new(
+        "SessionRuntime.AttemptAudioNotAvailable",
+        "No persisted child audio is available for this attempt.",
+        StatusCodes.Status404NotFound);
+
+    public static readonly Error AttemptAudioPersistFailed = new(
+        "SessionRuntime.AttemptAudioPersistFailed",
+        "The child attempt audio could not be read for persistence.",
+        StatusCodes.Status400BadRequest);
+
     public static readonly Error SessionNotInProgress = new(
         "SessionRuntime.SessionNotInProgress",
         "This session is not in progress.",

@@ -90,6 +90,10 @@ internal sealed class ContinueSessionStepCommandHandler
                 _db,
                 session.ActivityId,
                 cancellationToken);
+            await DoctorSessionCreditDebiter.TryDebitForCompletedSessionAsync(
+                _db,
+                session,
+                cancellationToken);
             await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
                 _db,
                 session,

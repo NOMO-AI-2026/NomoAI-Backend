@@ -3,7 +3,7 @@ using NomoAI.API.Common.Abstractions;
 
 namespace NomoAI.API.Features.Auth.Login_User
 {
-    public class LoginCommand:IRequest<Result<LoginResponseDto>>
+    public class LoginCommand:IRequest<Result<LoginAuthResult>>
     {
         public string Email { get; set; }
 

@@ -1,5 +1,6 @@
 using MediatR;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Jwt;
 
 namespace NomoAI.API.Features.Auth.Logout;
 
@@ -17,27 +18,29 @@ public static class LogoutEndpoint
             .WithSummary(
                 "Revoke a refresh token")
             .WithDescription(
-                "Revokes the supplied refresh token. Missing or " +
-                "invalid tokens still return success so logout " +
+                "Revokes the HttpOnly refresh-token cookie when " +
+                "present and always expires the cookie. Missing " +
+                "or invalid tokens still return success so logout " +
                 "is idempotent.")
-            .Accepts<LogoutRequest>(
-                "application/json")
             .Produces<LogoutResponse>(
                 StatusCodes.Status200OK);
     }
 
     private static async Task<IResult> HandleAsync(
-        LogoutRequest? request,
         ISender sender,
+        HttpContext httpContext,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var command =
-            new LogoutCommand(
-                request?.RefreshToken);
+        string? refreshToken = RefreshTokenCookie.Read(httpContext.Request);
 
         await sender.Send(
-            command,
+            new LogoutCommand(refreshToken),
             cancellationToken);
+
+        RefreshTokenCookie.Delete(
+            httpContext.Response,
+            environment);
 
         return Results.Ok(
             new LogoutResponse(

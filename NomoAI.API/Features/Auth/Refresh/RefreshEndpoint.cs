@@ -1,6 +1,6 @@
 using MediatR;
 using NomoAI.API.Common.Abstractions;
-using NomoAI.API.Features.Auth.Login_User;
+using NomoAI.API.Common.Jwt;
 
 namespace NomoAI.API.Features.Auth.Refresh;
 
@@ -18,36 +18,49 @@ public static class RefreshEndpoint
             .WithSummary(
                 "Rotate a refresh token and issue a new access token")
             .WithDescription(
-                "Validates the refresh token, rotates it, and " +
-                "returns a new access token together with a new " +
-                "refresh token. Reused refresh tokens revoke the " +
-                "entire family.")
-            .Accepts<RefreshRequest>(
-                "application/json")
-            .Produces<Result<LoginResponseDto>>(
+                "Reads the HttpOnly refresh-token cookie, rotates " +
+                "it, and returns a new access token. Reused " +
+                "refresh tokens revoke the entire family.")
+            .Produces<AccessTokenResponseDto>(
                 StatusCodes.Status200OK)
-            .Produces<Result<LoginResponseDto>>(
+            .Produces<Result<AccessTokenResponseDto>>(
                 StatusCodes.Status401Unauthorized)
             .Produces<Error>(
                 StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> HandleAsync(
-        RefreshRequest request,
         ISender sender,
+        HttpContext httpContext,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var command =
-            new RefreshCommand(
-                request.RefreshToken);
+        string? refreshToken = RefreshTokenCookie.Read(httpContext.Request);
 
-        Result<LoginResponseDto> result =
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return Result.Failure<AccessTokenResponseDto>(
+                AuthErrors.InvalidRefreshToken).ToProblem();
+        }
+
+        Result<RefreshAuthResult> result =
             await sender.Send(
-                command,
+                new RefreshCommand(refreshToken),
                 cancellationToken);
 
-        return result.IsSuccess
-            ? Results.Ok(result)
-            : result.ToProblem();
+        if (result.IsFailure)
+        {
+            return result.ToProblem();
+        }
+
+        RefreshAuthResult authResult = result.Value;
+
+        RefreshTokenCookie.Append(
+            httpContext.Response,
+            environment,
+            authResult.RawRefreshToken,
+            authResult.RefreshTokenExpiresAtUtc);
+
+        return Results.Ok(authResult.Response);
     }
 }

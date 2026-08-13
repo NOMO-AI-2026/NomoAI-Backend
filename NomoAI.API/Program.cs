@@ -392,6 +392,7 @@ namespace NomoAI.API
 
             //jwt 
             builder.Services.AddScoped<IJwtService, JwtService>();
+            builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
             //Auto Mapper
             builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);

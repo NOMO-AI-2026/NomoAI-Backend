@@ -12,17 +12,20 @@ namespace NomoAI.API.Features.Auth.Login_User
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IJwtService _jwtTokenService;
+        private readonly IRefreshTokenService _refreshTokenService;
         private readonly ILogger<LoginCommandHandler> _logger;
         private readonly AppDbContext _dbContext;
 
         public LoginCommandHandler(
             UserManager<ApplicationUser> userManager,
             IJwtService jwtTokenService,
+            IRefreshTokenService refreshTokenService,
             AppDbContext dbContext,
             ILogger<LoginCommandHandler> logger)
         {
             _userManager = userManager;
             _jwtTokenService = jwtTokenService;
+            _refreshTokenService = refreshTokenService;
             _logger = logger;
             _dbContext = dbContext;
         }
@@ -68,15 +71,28 @@ namespace NomoAI.API.Features.Auth.Login_User
 
 
             var (token, expiration) = await _jwtTokenService.GenerateTokenAsync(user);
-           
-            var response = new LoginResponseDto
+
+            Result<IssuedRefreshToken> refreshResult =
+                await _refreshTokenService.IssueAsync(user, cancellationToken);
+
+            if (refreshResult.IsFailure)
             {
-                UserId = user.Id,
-                Email = user.Email,
-                Token = token,
-                TokenExpiryTime = expiration,
-                UserRole = roles.FirstOrDefault()!
-            };
+                _logger.LogError(
+                    "Login succeeded for user {UserId} but refresh token issuance failed: {ErrorCode}.",
+                    user.Id,
+                    refreshResult.Error.Code);
+
+                return Result.Failure<LoginResponseDto>(refreshResult.Error);
+            }
+
+            var response = LoginResponseDto.Create(
+                user.Id,
+                user.Email!,
+                token,
+                expiration,
+                refreshResult.Value.RawToken,
+                refreshResult.Value.ExpiresAtUtc,
+                roles.FirstOrDefault()!);
 
 
             return Result<LoginResponseDto>.Success(response);

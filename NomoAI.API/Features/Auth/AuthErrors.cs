@@ -12,6 +12,10 @@ namespace NomoAI.API.Features.Auth
         public static readonly Error EmailNotConfirmed = new("Auth.EmailNotConfirmed", "You must confirm your email address.", 401);
         public static readonly Error UserRegistrationFailed = new("Auth.UserRegistrationFailed", "User Registration Failed, Try Again", 400);
         public static readonly Error DoctorNotApproved = new("Auth.DoctorNotApproved", "Your doctor account is not approved.", 401);
+        public static readonly Error InvalidRefreshToken = new("Auth.InvalidRefreshToken", "The refresh token is invalid.", 401);
+        public static readonly Error RefreshTokenExpired = new("Auth.RefreshTokenExpired", "The refresh token has expired.", 401);
+        public static readonly Error RefreshTokenReused = new("Auth.RefreshTokenReused", "The refresh token has already been used.", 401);
+        public static readonly Error RefreshTokenIssueFailed = new("Auth.RefreshTokenIssueFailed", "Could not issue a refresh token. Please try again.", 500);
         public static Error PasswordResetFailed(string description) =>new("Auth.PasswordResetFailed", description, 400);
         public static Error ChangePasswordFailed(
     string description) =>

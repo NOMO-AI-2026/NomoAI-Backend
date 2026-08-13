@@ -448,6 +448,14 @@ public sealed class AiCoreClient : IAiCoreClient
             content.Add(new StringContent(request.PreviousDecision, Encoding.UTF8), "previousDecision");
         }
 
+        if (request.SessionExecution is not null)
+        {
+            string executionJson = JsonSerializer.Serialize(
+                request.SessionExecution,
+                AiCoreJsonSerializerOptions.Instance);
+            content.Add(new StringContent(executionJson, Encoding.UTF8), "sessionExecution");
+        }
+
         return content;
     }
 

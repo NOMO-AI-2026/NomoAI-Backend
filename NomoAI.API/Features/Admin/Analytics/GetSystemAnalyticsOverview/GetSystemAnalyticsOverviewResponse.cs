@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace NomoAI.API.Features.Admin.Analytics.GetSystemAnalyticsOverview;
 
 public sealed record GetSystemAnalyticsOverviewResponse(
@@ -23,18 +25,18 @@ public sealed record ChildrenAnalyticsResponse(
 public sealed record TherapyAnalyticsResponse(
     int ActivitiesTotal,
     int SessionsTotal,
-    SessionsByStatusResponse SessionsByStatus,
+    [property: JsonPropertyName("sessionsByStatus")] SessionsByStatusResponse SessionsByStatus,
     int SessionAttemptsTotal,
     int SessionSummariesTotal,
     int AttemptEvaluationsTotal,
     int AttemptTranscriptionsTotal);
 
 public sealed record SessionsByStatusResponse(
-    int Scheduled,
-    int InProgress,
-    int Completed,
-    int Cancelled,
-    int Missed);
+    [property: JsonPropertyName("scheduled")] int Scheduled,
+    [property: JsonPropertyName("inProgress")] int InProgress,
+    [property: JsonPropertyName("completed")] int Completed,
+    [property: JsonPropertyName("cancelled")] int Cancelled,
+    [property: JsonPropertyName("missed")] int Missed);
 
 public sealed record AlertsAnalyticsResponse(
     int ProgressAlertsTotal,
@@ -56,7 +58,7 @@ public sealed record SupportAnalyticsResponse(
 
 public sealed record SupportTicketsByStatusResponse(
     int Unread,
-    int InProgress,
+    [property: JsonPropertyName("inProgress")] int InProgress,
     int Resolved,
     int Closed);
 

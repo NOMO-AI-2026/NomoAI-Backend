@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Enums;
+using NomoAI.API.Features.Sessions.Runtime;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Admin.Analytics.GetSystemAnalyticsOverview;
@@ -74,22 +75,27 @@ internal sealed class GetSystemAnalyticsOverviewHandler
             .AsNoTracking()
             .CountAsync(activity => !activity.IsDeleted, cancellationToken);
 
-        Dictionary<SessionStatus, int> sessionStatusCounts =
-            await _dbContext.Sessions
-                .AsNoTracking()
-                .Where(session => !session.IsDeleted)
-                .GroupBy(session => session.Status)
-                .Select(group => new
-                {
-                    Status = group.Key,
-                    Count = group.Count()
-                })
-                .ToDictionaryAsync(
-                    item => item.Status,
-                    item => item.Count,
-                    cancellationToken);
+        var sessionRows = await _dbContext.Sessions
+            .AsNoTracking()
+            .Where(session => !session.IsDeleted)
+            .Select(session => new
+            {
+                session.Status,
+                session.StartedAt,
+                session.EndedAt,
+                session.PlanJson
+            })
+            .ToListAsync(cancellationToken);
 
-        int sessionsTotal = sessionStatusCounts.Values.Sum();
+        Dictionary<SessionStatus, int> sessionStatusCounts = sessionRows
+            .GroupBy(row => SessionLifecycle.ResolveEffectiveStatus(
+                row.Status,
+                row.StartedAt,
+                row.EndedAt,
+                row.PlanJson))
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        int sessionsTotal = sessionRows.Count;
 
         int sessionAttemptsTotal = await _dbContext.SessionAttempts
             .AsNoTracking()

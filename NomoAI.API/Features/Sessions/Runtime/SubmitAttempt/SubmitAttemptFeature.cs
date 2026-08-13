@@ -8,8 +8,8 @@ using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Common.Options;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
+using NomoAI.API.Features.Sessions.Runtime.GetSessionRuntime;
 using NomoAI.API.Features.Sessions.Runtime.StartSession;
-using NomoAI.API.Features.Sessions.Summary;
 using NomoAI.API.Infrastructure.Ai;
 using NomoAI.API.Persistence;
 using NomoDoc.Domain.Entities;
@@ -132,12 +132,19 @@ internal sealed class SubmitAttemptCommandHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.Forbidden);
         }
 
-        if (session.Status != SessionStatus.InProgress)
+        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
+        if (SessionLifecycle.SynchronizePersistedStatus(session, plan) &&
+            session.Status == SessionStatus.Completed)
+        {
+            await SessionCompletion.FinalizeAsync(_db, session, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            return Result.Success(GetSessionRuntimeQueryHandler.BuildRuntimeResponse(session));
+        }
+
+        if (!SessionLifecycle.IsRunnable(session))
         {
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.SessionNotInProgress);
         }
-
-        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
         if (plan is null)
         {
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.PlanUnavailable);
@@ -180,7 +187,10 @@ internal sealed class SubmitAttemptCommandHandler
             ? "application/octet-stream"
             : request.ContentType.Split(';')[0].Trim();
 
-        (IReadOnlyList<double> previousScores, string? previousDecision, int consecutiveNoSpeechCount) =
+        (IReadOnlyList<double> previousScores,
+            string? previousDecision,
+            int consecutiveNoSpeechCount,
+            AiSessionExecutionDto? previousExecution) =
             await LoadAttemptHistoryAsync(session, cancellationToken);
 
         int stepAttemptNumber = session.CurrentAttemptNumber + 1;
@@ -188,6 +198,7 @@ internal sealed class SubmitAttemptCommandHandler
         int effectiveMaxAttempts = SessionStepTypes.EffectiveMaximumAttempts(
             step.Type, step.ExpectedChildAction, step.MaximumAttempts);
 
+        // Always send the doctor/session original prompt. practiceTarget lives only in sessionExecution.
         await using var evaluateStream = new MemoryStream(childAudioBytes, writable: false);
         var aiRequest = new AiEvaluateAttemptV2Request
         {
@@ -203,7 +214,8 @@ internal sealed class SubmitAttemptCommandHandler
             PreviousAttemptScores = previousScores.Count == 0 ? null : previousScores,
             PreviousDecision = previousDecision,
             ConsecutiveNoSpeechCount = consecutiveNoSpeechCount,
-            Language = session.Language
+            Language = session.Language,
+            SessionExecution = previousExecution
         };
 
         Result<AiEvaluateAttemptV2Response> evaluateResult =
@@ -271,18 +283,7 @@ internal sealed class SubmitAttemptCommandHandler
 
         if (session.Status == SessionStatus.Completed)
         {
-            await ActivitySessionGate.MarkUnavailableAfterCompletedSessionAsync(
-                _db,
-                session.ActivityId,
-                cancellationToken);
-            await DoctorSessionCreditDebiter.TryDebitForCompletedSessionAsync(
-                _db,
-                session,
-                cancellationToken);
-            await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
-                _db,
-                session,
-                cancellationToken);
+            await SessionCompletion.FinalizeAsync(_db, session, cancellationToken);
         }
 
         // Persist attempt + audio bytes first so we never store an AudioUrl without content.
@@ -353,12 +354,16 @@ internal sealed class SubmitAttemptCommandHandler
         }
     }
 
-    private async Task<(IReadOnlyList<double> PreviousScores, string? PreviousDecision, int ConsecutiveNoSpeechCount)>
+    private async Task<(
+        IReadOnlyList<double> PreviousScores,
+        string? PreviousDecision,
+        int ConsecutiveNoSpeechCount,
+        AiSessionExecutionDto? SessionExecution)>
         LoadAttemptHistoryAsync(Session session, CancellationToken cancellationToken)
     {
         if (session.CurrentAttemptNumber <= 0)
         {
-            return (Array.Empty<double>(), null, 0);
+            return (Array.Empty<double>(), null, 0, null);
         }
 
         // Attempts made on the current step are exactly the last CurrentAttemptNumber
@@ -383,10 +388,8 @@ internal sealed class SubmitAttemptCommandHandler
         var scores = new List<double>(recent.Count);
         foreach (var row in recent)
         {
-            AiEvaluateAttemptV2Response? snapshot = string.IsNullOrWhiteSpace(row.EvaluationJson)
-                ? null
-                : JsonSerializer.Deserialize<AiEvaluateAttemptV2Response>(
-                    row.EvaluationJson, AiCoreJsonSerializerOptions.Instance);
+            AiEvaluateAttemptV2Response? snapshot =
+                SessionExecutionSnapshot.TryDeserializeEvaluation(row.EvaluationJson);
 
             double? overall = snapshot?.Scores?.Overall ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore;
             if (overall is not null)
@@ -396,6 +399,9 @@ internal sealed class SubmitAttemptCommandHandler
         }
 
         string? previousDecision = recent.Count == 0 ? null : recent[^1].AdaptiveAction;
+        AiSessionExecutionDto? previousExecution = recent.Count == 0
+            ? null
+            : SessionExecutionSnapshot.TryReadFromEvaluationJson(recent[^1].EvaluationJson);
 
         int consecutiveNoSpeechCount = 0;
         for (int i = recent.Count - 1; i >= 0; i--)
@@ -410,7 +416,7 @@ internal sealed class SubmitAttemptCommandHandler
             }
         }
 
-        return (scores, previousDecision, consecutiveNoSpeechCount);
+        return (scores, previousDecision, consecutiveNoSpeechCount, previousExecution);
     }
 
     internal static void ApplyAdaptiveTransition(Session session, AiSessionPlanV2Response plan, string action)
@@ -423,8 +429,7 @@ internal sealed class SubmitAttemptCommandHandler
 
             case AdaptiveActions.End:
                 // Explicit session end from the adaptive engine only.
-                session.Status = SessionStatus.Completed;
-                session.EndedAt = DateTime.UtcNow;
+                SessionLifecycle.MarkCompleted(session);
                 break;
 
             case AdaptiveActions.EndAttempts:
@@ -441,6 +446,8 @@ internal sealed class SubmitAttemptCommandHandler
             case AdaptiveActions.RetrySame:
             case AdaptiveActions.RetryWithHint:
             case AdaptiveActions.Simplify:
+            case AdaptiveActions.Model:
+            case AdaptiveActions.SlowDown:
             case AdaptiveActions.AskFollowUp:
             case AdaptiveActions.ContinueConversation:
             case AdaptiveActions.TakeShortBreak:
@@ -473,8 +480,7 @@ internal sealed class SubmitAttemptCommandHandler
 
         if (SessionPlanSnapshot.GetStep(plan, nextStepNumber) is null)
         {
-            session.Status = SessionStatus.Completed;
-            session.EndedAt = DateTime.UtcNow;
+            SessionLifecycle.MarkCompleted(session);
         }
         else
         {

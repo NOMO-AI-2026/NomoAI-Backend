@@ -4,13 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
-using NomoAI.API.Features.Auth.Login_User;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Refresh;
 
 public sealed class RefreshHandler
-    : IRequestHandler<RefreshCommand, Result<LoginResponseDto>>
+    : IRequestHandler<RefreshCommand, Result<RefreshAuthResult>>
 {
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly IJwtService _jwtService;
@@ -29,7 +28,7 @@ public sealed class RefreshHandler
         _dbContext = dbContext;
     }
 
-    public async Task<Result<LoginResponseDto>> Handle(
+    public async Task<Result<RefreshAuthResult>> Handle(
         RefreshCommand request,
         CancellationToken cancellationToken)
     {
@@ -40,7 +39,7 @@ public sealed class RefreshHandler
 
         if (rotationResult.IsFailure)
         {
-            return Result.Failure<LoginResponseDto>(
+            return Result.Failure<RefreshAuthResult>(
                 rotationResult.Error);
         }
 
@@ -50,13 +49,13 @@ public sealed class RefreshHandler
 
         if (user is null || user.IsDeleted)
         {
-            return Result.Failure<LoginResponseDto>(
+            return Result.Failure<RefreshAuthResult>(
                 AuthErrors.InvalidRefreshToken);
         }
 
         if (!user.EmailConfirmed)
         {
-            return Result.Failure<LoginResponseDto>(
+            return Result.Failure<RefreshAuthResult>(
                 AuthErrors.EmailNotConfirmed);
         }
 
@@ -72,7 +71,7 @@ public sealed class RefreshHandler
 
             if (!isApproved)
             {
-                return Result.Failure<LoginResponseDto>(
+                return Result.Failure<RefreshAuthResult>(
                     AuthErrors.DoctorNotApproved);
             }
         }
@@ -80,15 +79,14 @@ public sealed class RefreshHandler
         var (token, expiration) =
             await _jwtService.GenerateTokenAsync(user);
 
-        var response = LoginResponseDto.Create(
-            user.Id,
-            user.Email!,
+        var response = new AccessTokenResponseDto(
             token,
-            expiration,
-            rotationResult.Value.RawRefreshToken,
-            rotationResult.Value.RefreshTokenExpiresAtUtc,
-            roles.FirstOrDefault()!);
+            expiration);
 
-        return Result<LoginResponseDto>.Success(response);
+        return Result<RefreshAuthResult>.Success(
+            new RefreshAuthResult(
+                response,
+                rotationResult.Value.RawRefreshToken,
+                rotationResult.Value.RefreshTokenExpiresAtUtc));
     }
 }

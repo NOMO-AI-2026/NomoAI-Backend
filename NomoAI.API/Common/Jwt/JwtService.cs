@@ -33,10 +33,10 @@ namespace NomoAI.API.Common.Jwt
             SigningCredentials signingCredentials =
                 new SigningCredentials(SignKey, SecurityAlgorithms.HmacSha256);
 
-            int accessTokenMinutes = _config.GetValue("Jwt:AccessTokenMinutes", 30);
+            int accessTokenMinutes = _config.GetValue("Jwt:AccessTokenMinutes", 15);
             if (accessTokenMinutes <= 0)
             {
-                accessTokenMinutes = 30;
+                accessTokenMinutes = 15;
             }
 
             //create token

@@ -8,7 +8,7 @@ using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Auth.Login_User
 {
-    public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginResponseDto>>
+    public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginAuthResult>>
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IJwtService _jwtTokenService;
@@ -30,13 +30,13 @@ namespace NomoAI.API.Features.Auth.Login_User
             _dbContext = dbContext;
         }
 
-        public async Task<Result<LoginResponseDto>> Handle(LoginCommand request, CancellationToken cancellationToken)
+        public async Task<Result<LoginAuthResult>> Handle(LoginCommand request, CancellationToken cancellationToken)
         {
             // 1. Find user by email
             var user = await _userManager.FindByEmailAsync(request.Email);
             if (user is null || user.IsDeleted)
             {
-                return Result.Failure<LoginResponseDto>(AuthErrors.InvalidCredentials);
+                return Result.Failure<LoginAuthResult>(AuthErrors.InvalidCredentials);
             }
 
             // 2. Check password
@@ -45,12 +45,12 @@ namespace NomoAI.API.Features.Auth.Login_User
             {
                 // Optional: track failed attempts / lockout
                 await _userManager.AccessFailedAsync(user);
-                return Result.Failure<LoginResponseDto>(AuthErrors.InvalidCredentials);
+                return Result.Failure<LoginAuthResult>(AuthErrors.InvalidCredentials);
             }
 
             if (!user.EmailConfirmed)
             {
-                return Result.Failure<LoginResponseDto>(AuthErrors.EmailNotConfirmed);
+                return Result.Failure<LoginAuthResult>(AuthErrors.EmailNotConfirmed);
             }
             var roles = await _userManager.GetRolesAsync(user);
             string role = roles.FirstOrDefault();
@@ -63,7 +63,7 @@ namespace NomoAI.API.Features.Auth.Login_User
                     .FirstOrDefaultAsync();
                 if (!isApproved)
                 {
-                    return Result.Failure<LoginResponseDto>(AuthErrors.DoctorNotApproved);
+                    return Result.Failure<LoginAuthResult>(AuthErrors.DoctorNotApproved);
                 }
             }
 
@@ -82,7 +82,7 @@ namespace NomoAI.API.Features.Auth.Login_User
                     user.Id,
                     refreshResult.Error.Code);
 
-                return Result.Failure<LoginResponseDto>(refreshResult.Error);
+                return Result.Failure<LoginAuthResult>(refreshResult.Error);
             }
 
             var response = LoginResponseDto.Create(
@@ -90,12 +90,13 @@ namespace NomoAI.API.Features.Auth.Login_User
                 user.Email!,
                 token,
                 expiration,
-                refreshResult.Value.RawToken,
-                refreshResult.Value.ExpiresAtUtc,
                 roles.FirstOrDefault()!);
 
-
-            return Result<LoginResponseDto>.Success(response);
+            return Result<LoginAuthResult>.Success(
+                new LoginAuthResult(
+                    response,
+                    refreshResult.Value.RawToken,
+                    refreshResult.Value.ExpiresAtUtc));
         }
     }
 }

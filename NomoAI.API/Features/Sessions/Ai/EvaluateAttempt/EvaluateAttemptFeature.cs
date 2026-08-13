@@ -46,6 +46,9 @@ public sealed class EvaluateAttemptFormRequest
     public string Language { get; init; } = "ar";
 
     public int Age { get; init; }
+
+    /// <summary>Optional JSON snapshot of sessionExecution from the previous evaluate response.</summary>
+    public string? SessionExecution { get; init; }
 }
 
 /// <summary>
@@ -71,7 +74,8 @@ public sealed record EvaluateAttemptCommand(
     string? PreviousDecision,
     int ConsecutiveNoSpeechCount,
     string Language,
-    string? AdditionalContext) : IRequest<Result<AiEvaluateAttemptResponse>>;
+    string? AdditionalContext,
+    string? SessionExecutionJson = null) : IRequest<Result<AiEvaluateAttemptResponse>>;
 
 public sealed class EvaluateAttemptCommandValidator : AbstractValidator<EvaluateAttemptCommand>
 {
@@ -207,7 +211,8 @@ public sealed class EvaluateAttemptCommandHandler
             PreviousAttemptScores = previousScores,
             PreviousDecision = request.PreviousDecision,
             ConsecutiveNoSpeechCount = request.ConsecutiveNoSpeechCount,
-            Language = request.Language
+            Language = request.Language,
+            SessionExecution = ParseSessionExecution(request.SessionExecutionJson)
         };
 
         Result<AiEvaluateAttemptV2Response> result =
@@ -238,7 +243,8 @@ public sealed class EvaluateAttemptCommandHandler
         AvatarModel = v2.AvatarModel,
         AvatarGenerationMode = v2.AvatarGenerationMode,
         UsedFallback = v2.UsedFallback,
-        GeneratedAt = v2.GeneratedAt
+        GeneratedAt = v2.GeneratedAt,
+        SessionExecution = v2.SessionExecution
     };
 
     private static AiSpeechAnalysisResultDto? ToLegacySpeechAnalysis(AiSpeechAnalysisV2Dto? v2) =>
@@ -278,6 +284,25 @@ public sealed class EvaluateAttemptCommandHandler
         try
         {
             return System.Text.Json.JsonSerializer.Deserialize<List<double>>(raw);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static AiSessionExecutionDto? ParseSessionExecution(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<AiSessionExecutionDto>(
+                raw,
+                NomoAI.API.Infrastructure.Ai.AiCoreJsonSerializerOptions.Instance);
         }
         catch (System.Text.Json.JsonException)
         {
@@ -346,7 +371,8 @@ public static class EvaluateAttemptEndpoint
             request.PreviousDecision,
             request.ConsecutiveNoSpeechCount,
             request.Language,
-            request.AdditionalContext);
+            request.AdditionalContext,
+            request.SessionExecution);
 
         Result<AiEvaluateAttemptResponse> result =
             await sender.Send(command, cancellationToken);

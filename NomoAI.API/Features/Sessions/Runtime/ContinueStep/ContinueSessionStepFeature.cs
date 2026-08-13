@@ -6,7 +6,6 @@ using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime.GetSessionRuntime;
-using NomoAI.API.Features.Sessions.Summary;
 using NomoAI.API.Persistence;
 using System.Security.Claims;
 
@@ -57,12 +56,20 @@ internal sealed class ContinueSessionStepCommandHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.Forbidden);
         }
 
-        if (session.Status != SessionStatus.InProgress)
+        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
+        if (SessionLifecycle.SynchronizePersistedStatus(session, plan) &&
+            session.Status == SessionStatus.Completed)
+        {
+            await SessionCompletion.FinalizeAsync(_db, session, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            return Result.Success(GetSessionRuntimeQueryHandler.BuildRuntimeResponse(session));
+        }
+
+        if (!SessionLifecycle.IsRunnable(session))
         {
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.SessionNotInProgress);
         }
 
-        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
         if (plan is null)
         {
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.PlanUnavailable);
@@ -84,20 +91,7 @@ internal sealed class ContinueSessionStepCommandHandler
 
         if (SessionPlanSnapshot.GetStep(plan, nextStepNumber) is null)
         {
-            session.Status = SessionStatus.Completed;
-            session.EndedAt = DateTime.UtcNow;
-            await ActivitySessionGate.MarkUnavailableAfterCompletedSessionAsync(
-                _db,
-                session.ActivityId,
-                cancellationToken);
-            await DoctorSessionCreditDebiter.TryDebitForCompletedSessionAsync(
-                _db,
-                session,
-                cancellationToken);
-            await SessionSummaryPersister.TryPersistForCompletedSessionAsync(
-                _db,
-                session,
-                cancellationToken);
+            await SessionCompletion.FinalizeAsync(_db, session, cancellationToken);
         }
         else
         {

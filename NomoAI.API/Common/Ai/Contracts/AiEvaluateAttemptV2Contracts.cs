@@ -36,6 +36,12 @@ public sealed class AiEvaluateAttemptV2Request
     public int ConsecutiveNoSpeechCount { get; init; }
 
     public string Language { get; init; } = "ar";
+
+    /// <summary>
+    /// Optional FastAPI execution snapshot from the previous evaluate response.
+    /// Null on the first attempt and for sessions created before Phase 1.
+    /// </summary>
+    public AiSessionExecutionDto? SessionExecution { get; init; }
 }
 
 public sealed class AiEvaluateAttemptV2Response
@@ -82,6 +88,57 @@ public sealed class AiEvaluateAttemptV2Response
 
     [JsonPropertyName("generatedAt")]
     public DateTimeOffset? GeneratedAt { get; init; }
+
+    /// <summary>
+    /// Authoritative in-session adaptive state. Echo this on the next evaluate request.
+    /// Absent on older FastAPI deployments and first-attempt-compatible responses.
+    /// </summary>
+    [JsonPropertyName("sessionExecution")]
+    public AiSessionExecutionDto? SessionExecution { get; init; }
+}
+
+/// <summary>
+/// FastAPI SessionExecutionState (camelCase). Temporary practice context only —
+/// does not replace the doctor-defined Activity/session prompt.
+/// </summary>
+public sealed class AiSessionExecutionDto
+{
+    [JsonPropertyName("originalTarget")]
+    public string OriginalTarget { get; init; } = string.Empty;
+
+    [JsonPropertyName("practiceTarget")]
+    public string PracticeTarget { get; init; } = string.Empty;
+
+    [JsonPropertyName("currentStep")]
+    public int? CurrentStep { get; init; }
+
+    [JsonPropertyName("attemptCount")]
+    public int AttemptCount { get; init; }
+
+    [JsonPropertyName("hintsUsed")]
+    public int HintsUsed { get; init; }
+
+    [JsonPropertyName("simplificationLevel")]
+    public int SimplificationLevel { get; init; }
+
+    [JsonPropertyName("previousActions")]
+    public IReadOnlyList<string> PreviousActions { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("successfulTargets")]
+    public IReadOnlyList<string> SuccessfulTargets { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("difficultTargets")]
+    public IReadOnlyList<string> DifficultTargets { get; init; } = Array.Empty<string>();
+
+    /// <summary>model_target | wait_for_child | evaluate | completed</summary>
+    [JsonPropertyName("phase")]
+    public string Phase { get; init; } = string.Empty;
+
+    [JsonPropertyName("modeledCurrentTarget")]
+    public bool ModeledCurrentTarget { get; init; }
+
+    [JsonPropertyName("slowedDown")]
+    public bool SlowedDown { get; init; }
 }
 
 /// <summary>

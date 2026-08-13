@@ -48,6 +48,27 @@ internal static class AdaptiveActions
     public const string EndAttempts = "end_attempts";
     public const string RecommendDoctorReview = "recommend_doctor_review";
     public const string TakeShortBreak = "take_short_break";
+    public const string Model = "model";
+    public const string SlowDown = "slow_down";
+
+    public static readonly IReadOnlySet<string> Known = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Advance,
+        RetrySame,
+        RetryWithHint,
+        Simplify,
+        Model,
+        SlowDown,
+        AskFollowUp,
+        ContinueConversation,
+        End,
+        EndAttempts,
+        RecommendDoctorReview,
+        TakeShortBreak
+    };
+
+    public static bool IsKnown(string? action) =>
+        !string.IsNullOrWhiteSpace(action) && Known.Contains(action);
 }
 
 public sealed class SessionRuntimeResponse

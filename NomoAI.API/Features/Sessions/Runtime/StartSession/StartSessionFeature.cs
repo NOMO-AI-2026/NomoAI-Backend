@@ -146,8 +146,6 @@ internal sealed class StartSessionCommandHandler
             ChildId = request.ChildId,
             ActivityId = request.ActivityId,
             SessionTitle = string.IsNullOrWhiteSpace(plan.Title) ? "Therapy session" : plan.Title,
-            Status = SessionStatus.InProgress,
-            StartedAt = now,
             PlanJson = SessionPlanSnapshot.Serialize(plan),
             CurrentStepNumber = 1,
             CurrentAttemptNumber = 0,
@@ -163,6 +161,8 @@ internal sealed class StartSessionCommandHandler
             Language = language,
             ChildAge = age
         };
+        SessionLifecycle.MarkStarted(session);
+        session.StartedAt = now;
 
         _db.Sessions.Add(session);
         await _db.SaveChangesAsync(cancellationToken);

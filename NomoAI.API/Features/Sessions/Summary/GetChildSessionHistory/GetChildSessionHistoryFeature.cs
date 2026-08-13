@@ -39,6 +39,9 @@ public sealed record ChildSessionHistoryItemDto
     /// Doctor review comment. Null until the doctor reviews the session.
     /// </summary>
     public string? DoctorComment { get; set; }
+
+    public bool repeatSession { get; set; }
+
 }
 
 public sealed record GetChildSessionHistoryQuery(int ChildId, string UserId)
@@ -110,7 +113,8 @@ internal sealed class GetChildSessionHistoryQueryHandler
                     AverageScore = summary != null ? (decimal?)summary.AverageScore : null,
                     IsDoctorReviewed = x.session.IsDoctorReviewed,
                     DoctorRating = x.session.DoctorRating,
-                    DoctorComment = x.session.DoctorComment
+                    DoctorComment = x.session.DoctorComment,
+                    repeatSession = x.session.Activity.CanMakeSession
                 })
             .OrderByDescending(row => row.EndedAt ?? row.StartedAt)
             .Take(50)
@@ -137,7 +141,8 @@ internal sealed class GetChildSessionHistoryQueryHandler
                 AverageScore = row.AverageScore,
                 IsDoctorReviewed = row.IsDoctorReviewed,
                 DoctorRating = row.DoctorRating,
-                DoctorComment = row.DoctorComment
+                DoctorComment = row.DoctorComment,
+                repeatSession = row.repeatSession
             })
             .ToArray();
 

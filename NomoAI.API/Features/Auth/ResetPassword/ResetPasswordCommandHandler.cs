@@ -4,6 +4,7 @@ using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Enums;
+using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
 
 namespace NomoAI.API.Features.Auth.ResetPassword;
@@ -13,15 +14,18 @@ public sealed class ResetPasswordHandler
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailOtpService _emailOtpService;
+    private readonly IRefreshTokenService _refreshTokenService;
     private readonly ILogger<ResetPasswordHandler> _logger;
 
     public ResetPasswordHandler(
         UserManager<ApplicationUser> userManager,
         IEmailOtpService emailOtpService,
+        IRefreshTokenService refreshTokenService,
         ILogger<ResetPasswordHandler> logger)
     {
         _userManager = userManager;
         _emailOtpService = emailOtpService;
+        _refreshTokenService = refreshTokenService;
         _logger = logger;
     }
 
@@ -117,11 +121,35 @@ public sealed class ResetPasswordHandler
             verifiedOtp.ReservationToken,
             cancellationToken);
 
+        await TryRevokeAllRefreshTokensAsync(
+            user.Id,
+            cancellationToken);
+
         _logger.LogInformation(
             "Password was reset successfully using OTP for user {UserId}.",
             user.Id);
 
         return Result.Success();
+    }
+
+    private async Task TryRevokeAllRefreshTokensAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _refreshTokenService.RevokeAllForUserAsync(
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Password was reset, but refresh tokens could not " +
+                "be revoked for user {UserId}.",
+                userId);
+        }
     }
 
     private async Task TryConsumeOtpAsync(

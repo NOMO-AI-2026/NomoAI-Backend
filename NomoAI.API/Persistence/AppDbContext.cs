@@ -54,6 +54,8 @@ namespace NomoAI.API.Persistence
         public DbSet<DoctorPlanPurchase> DoctorPlanPurchases { get; set; }
 
         public DbSet<DoctorTransaction> DoctorTransactions { get; set; }
+
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
         
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -178,6 +180,35 @@ namespace NomoAI.API.Persistence
             {
                 entity.ToTable("DoctorTransaction");
             });
+            builder.Entity<RefreshToken>(entity =>
+            {
+                entity.ToTable("RefreshTokens");
+
+                entity.HasKey(token => token.Id);
+
+                entity.Property(token => token.UserId)
+                    .HasMaxLength(450)
+                    .IsRequired();
+
+                entity.Property(token => token.TokenHash)
+                    .HasMaxLength(64)
+                    .IsRequired();
+
+                entity.Property(token => token.ReplacedByTokenHash)
+                    .HasMaxLength(64);
+
+                entity.HasIndex(token => token.TokenHash)
+                    .IsUnique();
+
+                entity.HasIndex(token => token.UserId);
+
+                entity.HasOne(token => token.User)
+                    .WithMany()
+                    .HasForeignKey(token => token.UserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
+            });
+
             builder.Entity<SessionSummary>(entity =>
             {
                 entity

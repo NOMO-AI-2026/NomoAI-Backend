@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,9 +12,12 @@ using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Behaviors;
 using NomoAI.API.Common.EmailOtp;
+using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Jwt;
 using NomoAI.API.Common.Options;
 using NomoAI.API.Common.Redis;
+using NomoAI.API.Common.Redis;
+using NomoAI.API.Common.Roles;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
 using NomoAI.API.Features.Admin;
@@ -24,15 +28,13 @@ using NomoAI.API.Features.Sessions;
 using NomoAI.API.Infrastructure;
 using NomoAI.API.Infrastructure.Ai;
 using NomoAI.API.Infrastructure.Email;
+using NomoAI.API.Infrastructure.BackgroundJobs;
+using NomoAI.API.Infrastructure.PayMob.Services;
 using NomoAI.API.Persistence;
+using StackExchange.Redis;
 using StackExchange.Redis;
 using System.Reflection;
 using System.Text;
-using NomoAI.API.Common.EmailOtp;
-using NomoAI.API.Common.Redis;
-using StackExchange.Redis;
-using NomoAI.API.Common.Roles;
-using NomoAI.API.Infrastructure.PayMob.Services;
 
 namespace NomoAI.API
 {
@@ -92,6 +94,12 @@ namespace NomoAI.API
                         }
                     });
             });
+            //Hangfire
+            builder.Services.AddHangfire(config =>
+            {
+                config.UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"));
+            });
+            builder.Services.AddHangfireServer();
 
             // Database
             builder.Services.AddDbContext<AppDbContext>(options =>
@@ -384,6 +392,7 @@ namespace NomoAI.API
 
             //jwt 
             builder.Services.AddScoped<IJwtService, JwtService>();
+            builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
             //Auto Mapper
             builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);
@@ -401,6 +410,7 @@ namespace NomoAI.API
             });
             //Payment 
             builder.Services.AddScoped<IPayMobService, PayMobService>();
+            builder.Services.AddScoped<ExpirePaymentQuickLinksBackgroundJob>();
 
             var app = builder.Build();
 
@@ -424,9 +434,14 @@ namespace NomoAI.API
             }
 
             app.UseCors("MyPolicy");
-
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseHangfireDashboard("/jobs");
+
+            RecurringJob.AddOrUpdate<ExpirePaymentQuickLinksBackgroundJob>(
+                ExpirePaymentQuickLinksBackgroundJob.RecurringJobId,
+                job => job.ExecuteAsync(),
+                "*/30 * * * *"); // every 30 minutes
 
             app.MapAuthEndpoints();
             app.MapEndpoints();

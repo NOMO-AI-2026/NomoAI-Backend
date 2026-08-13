@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Identity;
 using NomoAI.API.Common.Abstractions;
+using NomoAI.API.Common.Jwt;
 using NomoAI.API.Domain.Entities;
 
 namespace NomoAI.API.Features.Auth.ChangePassword;
@@ -9,11 +10,17 @@ internal sealed class ChangePasswordHandler
     : IRequestHandler<ChangePasswordCommand, Result<ChangePasswordResponse>>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IRefreshTokenService _refreshTokenService;
+    private readonly ILogger<ChangePasswordHandler> _logger;
 
     public ChangePasswordHandler(
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IRefreshTokenService refreshTokenService,
+        ILogger<ChangePasswordHandler> logger)
     {
         _userManager = userManager;
+        _refreshTokenService = refreshTokenService;
+        _logger = logger;
     }
 
     public async Task<Result<ChangePasswordResponse>> Handle(
@@ -44,9 +51,33 @@ internal sealed class ChangePasswordHandler
                 AuthErrors.ChangePasswordFailed(description));
         }
 
+        await TryRevokeAllRefreshTokensAsync(
+            user.Id,
+            cancellationToken);
+
         return Result.Success(
             new ChangePasswordResponse(
                 "Password changed successfully."));
+    }
+
+    private async Task TryRevokeAllRefreshTokensAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _refreshTokenService.RevokeAllForUserAsync(
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Password was changed, but refresh tokens could not " +
+                "be revoked for user {UserId}.",
+                userId);
+        }
     }
 
     private static string BuildFailureDescription(

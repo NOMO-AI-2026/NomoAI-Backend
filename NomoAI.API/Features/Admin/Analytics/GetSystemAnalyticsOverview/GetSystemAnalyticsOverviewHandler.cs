@@ -2,7 +2,6 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Enums;
-using NomoAI.API.Features.Sessions.Runtime;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Admin.Analytics.GetSystemAnalyticsOverview;
@@ -75,27 +74,36 @@ internal sealed class GetSystemAnalyticsOverviewHandler
             .AsNoTracking()
             .CountAsync(activity => !activity.IsDeleted, cancellationToken);
 
-        var sessionRows = await _dbContext.Sessions
+        // Scheduled = activities ready for a session, with no active InProgress session.
+        int sessionsScheduled = await _dbContext.Activities
             .AsNoTracking()
-            .Where(session => !session.IsDeleted)
-            .Select(session => new
-            {
-                session.Status,
-                session.StartedAt,
-                session.EndedAt,
-                session.PlanJson
-            })
-            .ToListAsync(cancellationToken);
+            .CountAsync(
+                activity =>
+                    !activity.IsDeleted &&
+                    activity.CanMakeSession &&
+                    !activity.Sessions.Any(session =>
+                        !session.IsDeleted &&
+                        session.Status == SessionStatus.InProgress),
+                cancellationToken);
 
-        Dictionary<SessionStatus, int> sessionStatusCounts = sessionRows
-            .GroupBy(row => SessionLifecycle.ResolveEffectiveStatus(
-                row.Status,
-                row.StartedAt,
-                row.EndedAt,
-                row.PlanJson))
-            .ToDictionary(group => group.Key, group => group.Count());
+        int sessionsInProgress = await _dbContext.Sessions
+            .AsNoTracking()
+            .CountAsync(
+                session =>
+                    !session.IsDeleted &&
+                    session.Status == SessionStatus.InProgress,
+                cancellationToken);
 
-        int sessionsTotal = sessionRows.Count;
+        int sessionsCompleted = await _dbContext.Sessions
+            .AsNoTracking()
+            .CountAsync(
+                session =>
+                    !session.IsDeleted &&
+                    session.Status == SessionStatus.Completed,
+                cancellationToken);
+
+        int sessionsTotal =
+            sessionsScheduled + sessionsInProgress + sessionsCompleted;
 
         int sessionAttemptsTotal = await _dbContext.SessionAttempts
             .AsNoTracking()

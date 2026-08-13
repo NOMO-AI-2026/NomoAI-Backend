@@ -34,9 +34,7 @@ public sealed record TherapyAnalyticsResponse(
 public sealed record SessionsByStatusResponse(
     [property: JsonPropertyName("scheduled")] int Scheduled,
     [property: JsonPropertyName("inProgress")] int InProgress,
-    [property: JsonPropertyName("completed")] int Completed,
-    [property: JsonPropertyName("cancelled")] int Cancelled,
-    [property: JsonPropertyName("missed")] int Missed);
+    [property: JsonPropertyName("completed")] int Completed);
 
 public sealed record AlertsAnalyticsResponse(
     int ProgressAlertsTotal,

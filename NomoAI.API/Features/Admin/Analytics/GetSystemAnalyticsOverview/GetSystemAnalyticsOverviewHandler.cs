@@ -74,22 +74,36 @@ internal sealed class GetSystemAnalyticsOverviewHandler
             .AsNoTracking()
             .CountAsync(activity => !activity.IsDeleted, cancellationToken);
 
-        Dictionary<SessionStatus, int> sessionStatusCounts =
-            await _dbContext.Sessions
-                .AsNoTracking()
-                .Where(session => !session.IsDeleted)
-                .GroupBy(session => session.Status)
-                .Select(group => new
-                {
-                    Status = group.Key,
-                    Count = group.Count()
-                })
-                .ToDictionaryAsync(
-                    item => item.Status,
-                    item => item.Count,
-                    cancellationToken);
+        // Scheduled = activities ready for a session, with no active InProgress session.
+        int sessionsScheduled = await _dbContext.Activities
+            .AsNoTracking()
+            .CountAsync(
+                activity =>
+                    !activity.IsDeleted &&
+                    activity.CanMakeSession &&
+                    !activity.Sessions.Any(session =>
+                        !session.IsDeleted &&
+                        session.Status == SessionStatus.InProgress),
+                cancellationToken);
 
-        int sessionsTotal = sessionStatusCounts.Values.Sum();
+        int sessionsInProgress = await _dbContext.Sessions
+            .AsNoTracking()
+            .CountAsync(
+                session =>
+                    !session.IsDeleted &&
+                    session.Status == SessionStatus.InProgress,
+                cancellationToken);
+
+        int sessionsCompleted = await _dbContext.Sessions
+            .AsNoTracking()
+            .CountAsync(
+                session =>
+                    !session.IsDeleted &&
+                    session.Status == SessionStatus.Completed,
+                cancellationToken);
+
+        int sessionsTotal =
+            sessionsScheduled + sessionsInProgress + sessionsCompleted;
 
         int sessionAttemptsTotal = await _dbContext.SessionAttempts
             .AsNoTracking()
@@ -191,16 +205,9 @@ internal sealed class GetSystemAnalyticsOverviewHandler
                 ActivitiesTotal: activitiesTotal,
                 SessionsTotal: sessionsTotal,
                 SessionsByStatus: new SessionsByStatusResponse(
-                    Scheduled: sessionStatusCounts.GetValueOrDefault(
-                        SessionStatus.Scheduled),
-                    InProgress: sessionStatusCounts.GetValueOrDefault(
-                        SessionStatus.InProgress),
-                    Completed: sessionStatusCounts.GetValueOrDefault(
-                        SessionStatus.Completed),
-                    Cancelled: sessionStatusCounts.GetValueOrDefault(
-                        SessionStatus.Cancelled),
-                    Missed: sessionStatusCounts.GetValueOrDefault(
-                        SessionStatus.Missed)),
+                    Scheduled: sessionsScheduled,
+                    InProgress: sessionsInProgress,
+                    Completed: sessionsCompleted),
                 SessionAttemptsTotal: sessionAttemptsTotal,
                 SessionSummariesTotal: sessionSummariesTotal,
                 AttemptEvaluationsTotal: attemptEvaluationsTotal,

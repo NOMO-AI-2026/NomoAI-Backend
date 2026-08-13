@@ -12,6 +12,6 @@ namespace NomoAI.API.Domain.Enums
         InProgress,
         Completed,
         Cancelled,
-        Missed 
+        Missed
     }
 }

@@ -32,9 +32,7 @@ public sealed record TherapyAnalyticsResponse(
 public sealed record SessionsByStatusResponse(
     int Scheduled,
     int InProgress,
-    int Completed,
-    int Cancelled,
-    int Missed);
+    int Completed);
 
 public sealed record AlertsAnalyticsResponse(
     int ProgressAlertsTotal,

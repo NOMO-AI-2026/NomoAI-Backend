@@ -34,6 +34,15 @@ internal sealed class GetSessionAttemptsHandler
             return Result.Failure<GetSessionAttemptsResponse>(SessionRuntimeErrors.Forbidden);
         }
 
+        bool isDoctor = await _db.Doctor
+            .AsNoTracking()
+            .AnyAsync(d => d.UserId == request.UserId && !d.IsDeleted, cancellationToken);
+
+        if (!isDoctor)
+        {
+            return Result.Failure<GetSessionAttemptsResponse>(SessionRuntimeErrors.Forbidden);
+        }
+
         var rows = await _db.SessionAttempts
             .AsNoTracking()
             .Where(a => a.SessionId == session.Id && !a.IsDeleted)

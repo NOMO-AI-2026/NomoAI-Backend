@@ -10,9 +10,9 @@ public sealed class GetSessionAttemptsEndpoint : IEndpoint
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/sessions/{sessionId:int}/attempts", HandleAsync)
-            .RequireAuthorization(policy => policy.RequireRole("Doctor", "Parent"))
+            .RequireAuthorization(policy => policy.RequireRole("Doctor"))
             .WithName("GetSessionAttempts")
-            .WithSummary("Get all attempts for a therapy session, including evaluation and transcription")
+            .WithSummary("Get all attempts for a therapy session, including evaluation and transcription. Doctor only.")
             .WithTags("Sessions Runtime")
             .Produces<GetSessionAttemptsResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)

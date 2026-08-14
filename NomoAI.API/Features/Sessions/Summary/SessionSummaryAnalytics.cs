@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NomoAI.API.Common.Ai.Contracts;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Infrastructure.Ai;
@@ -10,6 +11,7 @@ namespace NomoAI.API.Features.Sessions.Summary;
 
 /// <summary>
 /// Authoritative session analytics from persisted attempts (not soft AI wording).
+/// Progression-aware: ADVANCE = original/plan target achieved; null scores ≠ zero.
 /// </summary>
 internal static class SessionSummaryAnalytics
 {
@@ -18,11 +20,21 @@ internal static class SessionSummaryAnalytics
     private const double TrendDelta = 5.0;
 
     public sealed record AttemptSignal(
+        int AttemptId,
         int AttemptNumber,
         double? OverallScore,
+        double? AccuracyScore,
+        double? CompletenessScore,
+        double? FluencyScore,
+        double? PronunciationScore,
         bool Matched,
+        bool PracticeEqualsOriginal,
         string SpeechOutcome,
-        string? AdaptiveAction);
+        string? AdaptiveAction,
+        int HintsUsed,
+        int SimplificationLevel,
+        string? OriginalTarget,
+        string? PracticeTarget);
 
     public sealed record ComputedAnalytics(
         int TotalAttempts,
@@ -30,6 +42,15 @@ internal static class SessionSummaryAnalytics
         int ScoredAttempts,
         int NoSpeechAttempts,
         int InterventionCount,
+        int RetryCount,
+        int HintCount,
+        int SimplificationCount,
+        int AccuracySampleCount,
+        int CompletenessSampleCount,
+        int FluencySampleCount,
+        int PronunciationSampleCount,
+        bool OriginalTargetAchieved,
+        bool PracticeTargetAchieved,
         decimal AverageScore,
         decimal BestScore,
         decimal ImprovementPercentage,
@@ -55,44 +76,99 @@ internal static class SessionSummaryAnalytics
                 from a in db.SessionAttempts.AsNoTracking()
                 join e in db.AttemptEvaluations.AsNoTracking() on a.Id equals e.AttemptId
                 where a.SessionId == sessionId && !a.IsDeleted && !e.IsDeleted
-                orderby a.AttemptNumber
-                select new { a.AttemptNumber, e })
+                orderby a.AttemptNumber, a.Id
+                select new { a.Id, a.AttemptNumber, e })
             .ToListAsync(cancellationToken);
+
+        // Distinct by AttemptId — guard against accidental join duplication.
+        rows = rows
+            .GroupBy(r => r.Id)
+            .Select(g => g.First())
+            .OrderBy(r => r.AttemptNumber)
+            .ThenBy(r => r.Id)
+            .ToList();
 
         var signals = new List<AttemptSignal>(rows.Count);
         foreach (var row in rows)
         {
             AiEvaluateAttemptV2Response? snapshot = Deserialize(row.e.EvaluationJson);
-            double? overall = snapshot?.Scores?.Overall
-                ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore;
+            AiSessionExecutionDto? execution = snapshot?.SessionExecution;
+            AiAdaptiveDecisionDto? decision = snapshot?.AdaptiveDecision;
+            string? original = execution?.OriginalTarget ?? decision?.OriginalTarget;
+            string? practice = execution?.PracticeTarget ?? decision?.PracticeTarget;
+            int hintsUsed = execution?.HintsUsed ?? decision?.HintsUsed ?? 0;
+            int simplificationLevel = execution?.SimplificationLevel ?? decision?.SimplificationLevel ?? 0;
 
-            if (overall is null)
-            {
-                overall = (double)(
-                    (row.e.AccuracyScore
-                     + row.e.FluencyScore
-                     + row.e.PronunciationScore
-                     + row.e.CompletenessScore) / 4m);
-            }
+            double? accuracy = snapshot?.Scores?.Accuracy
+                ?? snapshot?.SpeechAnalysis?.Scores?.AccuracyScore
+                ?? (double)row.e.AccuracyScore;
 
-            overall = NormalizeScore(overall);
+            double? completeness = snapshot?.Scores?.Completeness
+                ?? snapshot?.SpeechAnalysis?.Scores?.CompletenessScore
+                ?? (double)row.e.CompletenessScore;
 
-            bool matched = row.e.IsSuccessful
-                || row.e.Matched == true
-                || snapshot?.Scores?.Matched == true
-                || snapshot?.SpeechAnalysis?.Scores?.Matched == true
-                || (overall is >= SuccessScoreThreshold);
+            // Prefer JSON nullability; only fall back to DB when the property was present as a number.
+            // Missing evidence must stay null — never invent 0 from a coerced column.
+            double? fluency = ReadNullableComponent(
+                snapshot?.Scores?.Fluency,
+                snapshot?.SpeechAnalysis?.Scores?.FluencyScore,
+                row.e.FluencyScore,
+                snapshotHadScores: snapshot?.Scores is not null || snapshot?.SpeechAnalysis?.Scores is not null);
+
+            double? pronunciation = ReadNullableComponent(
+                snapshot?.Scores?.Pronunciation,
+                snapshot?.SpeechAnalysis?.Scores?.PronunciationProxyScore,
+                row.e.PronunciationScore,
+                snapshotHadScores: snapshot?.Scores is not null || snapshot?.SpeechAnalysis?.Scores is not null);
+
+            double? overall = EvidenceAwareScoreMath.ResolveOverall(
+                snapshot?.Scores?.Overall ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore,
+                accuracy,
+                completeness,
+                fluency,
+                pronunciation);
 
             string speechOutcome = row.e.SpeechOutcome
                 ?? snapshot?.SpeechOutcome
                 ?? "scored";
 
+            if (IsNoSpeech(speechOutcome))
+            {
+                // No-speech must not contribute fabricated overalls to averages.
+                overall = null;
+            }
+
+            string? originalTarget = original;
+            string? practiceTarget = practice;
+            bool practiceEqualsOriginal =
+                !string.IsNullOrWhiteSpace(originalTarget)
+                && !string.IsNullOrWhiteSpace(practiceTarget)
+                && string.Equals(
+                    originalTarget.Trim(),
+                    practiceTarget.Trim(),
+                    StringComparison.Ordinal);
+
+            bool matched = row.e.IsSuccessful
+                || row.e.Matched == true
+                || snapshot?.Scores?.Matched == true
+                || snapshot?.SpeechAnalysis?.Scores?.Matched == true;
+
             signals.Add(new AttemptSignal(
+                row.Id,
                 row.AttemptNumber,
                 overall,
+                EvidenceAwareScoreMath.NormalizeScore(accuracy),
+                EvidenceAwareScoreMath.NormalizeScore(completeness),
+                EvidenceAwareScoreMath.NormalizeScore(fluency),
+                EvidenceAwareScoreMath.NormalizeScore(pronunciation),
                 matched,
+                practiceEqualsOriginal,
                 speechOutcome,
-                row.e.AdaptiveAction ?? snapshot?.AdaptiveDecision.Action));
+                row.e.AdaptiveAction ?? decision?.Action,
+                hintsUsed,
+                simplificationLevel,
+                originalTarget,
+                practiceTarget));
         }
 
         return signals;
@@ -100,24 +176,46 @@ internal static class SessionSummaryAnalytics
 
     public static ComputedAnalytics Compute(
         Session session,
-        IReadOnlyList<AttemptSignal> attempts)
+        IReadOnlyList<AttemptSignal> attempts,
+        ILogger? logger = null)
     {
         int total = attempts.Count;
+        int distinctIds = attempts.Select(a => a.AttemptId).Distinct().Count();
         int noSpeech = attempts.Count(a => IsNoSpeech(a.SpeechOutcome));
         int scored = total - noSpeech;
-        int successful = attempts.Count(a => a.Matched);
-        int interventions = attempts.Count(a =>
-            a.AdaptiveAction is "retry_with_hint" or "simplify");
 
+        // Original/plan target mastery = ADVANCE (not simplified practice match alone).
+        int advances = attempts.Count(a =>
+            string.Equals(a.AdaptiveAction, "advance", StringComparison.OrdinalIgnoreCase));
+        int successful = advances;
+
+        int retries = attempts.Count(a =>
+            a.AdaptiveAction is "retry_same" or "retry_with_hint");
+        int hints = attempts.Count(a =>
+            a.AdaptiveAction is "retry_with_hint");
+        int simplifications = attempts.Count(a =>
+            a.AdaptiveAction is "simplify");
+        int interventions = hints + simplifications
+            + attempts.Count(a => a.AdaptiveAction is "model" or "slow_down");
+
+        bool practiceAchieved = attempts.Any(a =>
+            a.Matched && !a.PracticeEqualsOriginal);
+        bool originalAchieved = advances > 0
+            || attempts.Any(a =>
+                a.Matched
+                && a.PracticeEqualsOriginal
+                && a.AdaptiveAction is "advance" or "end_attempts");
+
+        // Measurable overalls only — exclude no-speech and null overall.
         List<double> overalls = attempts
-            .Where(a => a.OverallScore is not null)
+            .Where(a => a.OverallScore is not null && !IsNoSpeech(a.SpeechOutcome))
             .Select(a => a.OverallScore!.Value)
             .ToList();
 
         double? first = overalls.Count > 0 ? overalls[0] : null;
         double? final = overalls.Count > 0 ? overalls[^1] : null;
         double? best = overalls.Count > 0 ? overalls.Max() : null;
-        double? average = overalls.Count > 0 ? overalls.Average() : null;
+        double? average = overalls.Count > 0 ? Math.Round(overalls.Average(), 2) : null;
         double improvement = first is not null && final is not null
             ? Math.Round(final.Value - first.Value, 2)
             : 0;
@@ -126,6 +224,11 @@ internal static class SessionSummaryAnalytics
         string? finalAction = attempts.Count > 0 ? attempts[^1].AdaptiveAction : null;
         bool doctorReview = session.RequiresDoctorReview
             || attempts.Any(a => a.AdaptiveAction == "recommend_doctor_review");
+
+        int accuracySamples = attempts.Count(a => a.AccuracyScore is not null && !IsNoSpeech(a.SpeechOutcome));
+        int completenessSamples = attempts.Count(a => a.CompletenessScore is not null && !IsNoSpeech(a.SpeechOutcome));
+        int fluencySamples = attempts.Count(a => a.FluencyScore is not null);
+        int pronunciationSamples = attempts.Count(a => a.PronunciationScore is not null);
 
         double? duration = null;
         if (session.StartedAt is DateTime started)
@@ -137,7 +240,8 @@ internal static class SessionSummaryAnalytics
         string outcome = SelectOutcome(
             total,
             noSpeech,
-            successful,
+            originalAchieved,
+            practiceAchieved,
             best,
             final,
             improvement,
@@ -152,6 +256,11 @@ internal static class SessionSummaryAnalytics
                 successful,
                 scored,
                 noSpeech,
+                retries,
+                hints,
+                simplifications,
+                originalAchieved,
+                practiceAchieved,
                 average,
                 best,
                 first,
@@ -159,7 +268,24 @@ internal static class SessionSummaryAnalytics
                 improvement,
                 trend,
                 outcome,
-                doctorReview);
+                doctorReview,
+                fluencySamples,
+                pronunciationSamples);
+
+        logger?.LogInformation(
+            "SessionSummary diagnostics SessionId={SessionId} AttemptCount={AttemptCount} DistinctAttemptCount={DistinctAttemptCount} MatchedAdvances={Advances} RetryCount={RetryCount} HintCount={HintCount} SimplificationCount={SimplificationCount} AccuracySampleCount={AccuracySampleCount} CompletenessSampleCount={CompletenessSampleCount} FluencySampleCount={FluencySampleCount} PronunciationSampleCount={PronunciationSampleCount} OriginalTargetAchieved={OriginalTargetAchieved}",
+            session.Id,
+            total,
+            distinctIds,
+            advances,
+            retries,
+            hints,
+            simplifications,
+            accuracySamples,
+            completenessSamples,
+            fluencySamples,
+            pronunciationSamples,
+            originalAchieved);
 
         return new ComputedAnalytics(
             TotalAttempts: total,
@@ -167,6 +293,15 @@ internal static class SessionSummaryAnalytics
             ScoredAttempts: scored,
             NoSpeechAttempts: noSpeech,
             InterventionCount: interventions,
+            RetryCount: retries,
+            HintCount: hints,
+            SimplificationCount: simplifications,
+            AccuracySampleCount: accuracySamples,
+            CompletenessSampleCount: completenessSamples,
+            FluencySampleCount: fluencySamples,
+            PronunciationSampleCount: pronunciationSamples,
+            OriginalTargetAchieved: originalAchieved,
+            PracticeTargetAchieved: practiceAchieved || originalAchieved,
             AverageScore: ToDecimal(average),
             BestScore: ToDecimal(best),
             ImprovementPercentage: ToDecimal(improvement),
@@ -212,8 +347,8 @@ internal static class SessionSummaryAnalytics
 
     public static string MapDoctorOutcomeLabel(string outcome) => outcome switch
     {
-        "completed_successfully" => "اكتملت بنجاح — الهدف تحقق في محاولات الجلسة",
-        "completed_with_progress" => "اكتملت مع تحسن ملحوظ في الدرجات",
+        "completed_successfully" => "اكتملت بنجاح — الهدف الأصلي تحقق",
+        "completed_with_progress" => "اكتملت مع تقدّم علاجي (تلميح/تبسيط/إعادة)",
         "completed_needs_practice" => "اكتملت وتحتاج مزيدًا من التدريب على نفس الهدف",
         "ended_max_attempts" => "انتهت ببلوغ الحد الأقصى للمحاولات دون تحقق كامل للهدف",
         "ended_no_speech" => "انتهت مع ضعف في رصد الكلام الواضح",
@@ -225,7 +360,8 @@ internal static class SessionSummaryAnalytics
     private static string SelectOutcome(
         int total,
         int noSpeech,
-        int successful,
+        bool originalAchieved,
+        bool practiceAchieved,
         double? best,
         double? final,
         double improvement,
@@ -243,14 +379,22 @@ internal static class SessionSummaryAnalytics
             return "ended_no_speech";
         }
 
-        if (successful > 0 || (best is >= SuccessScoreThreshold) || (final is >= SuccessScoreThreshold))
+        // ADVANCE / original mastery — not simplified practice match alone.
+        if (originalAchieved || finalAction is "advance")
         {
             return "completed_successfully";
         }
 
-        if (trend == "improving" && improvement >= ProgressDelta)
+        if (practiceAchieved || (trend == "improving" && improvement >= ProgressDelta))
         {
             return "completed_with_progress";
+        }
+
+        // High final score on original-scale practice without ADVANCE still counts as success signal.
+        if ((best is >= SuccessScoreThreshold || final is >= SuccessScoreThreshold)
+            && finalAction is not "recommend_doctor_review")
+        {
+            return "completed_successfully";
         }
 
         if (finalAction is "end_attempts" || (total >= 5 && finalAction is "end_attempts" or "recommend_doctor_review"))
@@ -272,6 +416,11 @@ internal static class SessionSummaryAnalytics
         int successful,
         int scored,
         int noSpeech,
+        int retries,
+        int hints,
+        int simplifications,
+        bool originalAchieved,
+        bool practiceAchieved,
         double? average,
         double? best,
         double? first,
@@ -279,7 +428,9 @@ internal static class SessionSummaryAnalytics
         double improvement,
         string trend,
         string outcome,
-        bool doctorReview)
+        bool doctorReview,
+        int fluencySamples,
+        int pronunciationSamples)
     {
         string target = string.IsNullOrWhiteSpace(session.Prompt)
             ? session.SessionTitle
@@ -298,9 +449,40 @@ internal static class SessionSummaryAnalytics
             _ => "غير متاح"
         };
 
+        string progression;
+        if (originalAchieved)
+        {
+            progression = simplifications > 0 || hints > 0 || retries > 0
+                ? $"تحقّق الهدف الأصلي بعد دعم علاجي (إعادة={retries}، تلميح={hints}، تبسيط={simplifications})."
+                : "تحقّق الهدف الأصلي بشكل مستقل.";
+        }
+        else if (practiceAchieved)
+        {
+            progression = "نجح الطفل على هدف مبسّط للممارسة، ولم يُسجَّل بعد تحقق كامل للهدف الأصلي.";
+        }
+        else
+        {
+            progression = "لم يُسجَّل تحقق للهدف الأصلي في هذه الجلسة.";
+        }
+
+        string evidenceNote = "";
+        if (fluencySamples == 0 && pronunciationSamples == 0)
+        {
+            evidenceNote = " لا تتوفر أدلة طلاقة/نطق صوتية كافية؛ لم تُحتسب كفشل.";
+        }
+        else if (pronunciationSamples == 0)
+        {
+            evidenceNote = " لا تتوفر أدلة نطق صوتية كافية؛ لم تُحتسب كفشل.";
+        }
+        else if (fluencySamples == 0)
+        {
+            evidenceNote = " لا تتوفر أدلة طلاقة كافية؛ لم تُحتسب كفشل.";
+        }
+
         string summary =
             $"تحليل الجلسة على الهدف «{target}»: عدد المحاولات {total}، منها {scored} بمحاولة صوتية مسجّلة و{noSpeech} بدون كلام واضح. " +
-            $"المحاولات المطابقة للهدف {successful}. متوسط الدرجة {avgText}، أفضل درجة {bestText}، من {firstText} إلى {finalText} (تغير {improvement:+0;-0;0} نقطة)، والاتجاه {trendAr}. " +
+            $"{progression} " +
+            $"متوسط الدرجة القابلة للقياس {avgText}، أفضل درجة {bestText}، من {firstText} إلى {finalText} (تغير {improvement:+0;-0;0} نقطة)، والاتجاه {trendAr}.{evidenceNote} " +
             MapDoctorOutcomeLabel(outcome) + ".";
 
         var strengths = new List<string>();
@@ -314,14 +496,18 @@ internal static class SessionSummaryAnalytics
             strengths.Add($"وُجدت {scored} محاولة صوتية قابلة للتقييم.");
         }
 
-        if (successful > 0)
+        if (originalAchieved)
         {
-            strengths.Add($"تحقّقت مطابقة الهدف في {successful} محاولة.");
+            strengths.Add($"تحقّق الهدف الأصلي ({successful} انتقال ADVANCE).");
+        }
+        else if (practiceAchieved)
+        {
+            strengths.Add("نجاح على هدف الممارسة المبسّط (ليس إتقان الهدف الأصلي بعد).");
         }
 
         if (improvement > 0)
         {
-            strengths.Add($"تحسن الدرجة بمقدار {improvement:0} نقطة بين أول وآخر محاولة.");
+            strengths.Add($"تحسن الدرجة بمقدار {improvement:0} نقطة بين أول وآخر محاولة قابلة للقياس.");
         }
 
         if (strengths.Count == 0)
@@ -330,7 +516,7 @@ internal static class SessionSummaryAnalytics
         }
 
         var practice = new List<string>();
-        if (successful == 0 && scored > 0)
+        if (!originalAchieved && scored > 0)
         {
             practice.Add($"إعادة تدريب قصير على «{target}» مع نموذج نطق أوضح.");
         }
@@ -340,20 +526,21 @@ internal static class SessionSummaryAnalytics
             practice.Add("تشجيع إنتاج صوت قصير في بداية كل محاولة لتقليل محاولات بدون كلام.");
         }
 
-        if (average is < 50)
+        // Do not treat missing evidence / early retries as "poor average" when target was achieved.
+        if (!originalAchieved && average is < 50)
         {
             practice.Add("تخفيض صعوبة الهدف مؤقتًا أو تقسيمه لمقاطع أصغر.");
         }
 
         if (practice.Count == 0)
         {
-            practice.Add("الاستمرار على نفس الهدف مع تتبع الدرجات عبر الجلسات.");
+            practice.Add("الاستمرار على نفس الهدف مع تتبع التقدّم عبر الجلسات.");
         }
 
         string next = outcome switch
         {
             "completed_successfully" => $"يمكن الانتقال لهدف مجاور أو تثبيت «{target}» بجلسة قصيرة.",
-            "completed_with_progress" => $"متابعة «{target}» مع تلميح خفيف في الجلسة القادمة.",
+            "completed_with_progress" => $"متابعة «{target}» مع تلميح خفيف أو تثبيت بعد التبسيط.",
             "ended_max_attempts" => $"مراجعة الخطة قبل إعادة «{target}» بعدد محاولات أقل وضغط أقل.",
             "ended_no_speech" => $"إعادة الجلسة مع دعم بصري بسيط لنفس الهدف «{target}».",
             "doctor_review_recommended" => "انتظار توجيه الأخصائي قبل تغيير مستوى الكلام أو الهدف.",
@@ -361,7 +548,7 @@ internal static class SessionSummaryAnalytics
         };
 
         string? note = doctorReview
-            ? $"يُفضّل مراجعة الأخصائي: {total} محاولات، مطابقة={successful}، متوسط={avgText}، أفضل={bestText}."
+            ? $"يُفضّل مراجعة الأخصائي: {total} محاولات، ADVANCE={successful}، متوسط قابل للقياس={avgText}، أفضل={bestText}."
             : null;
 
         return (summary, strengths, practice, next, note);
@@ -410,21 +597,40 @@ internal static class SessionSummaryAnalytics
     private static bool IsNoSpeech(string speechOutcome) =>
         speechOutcome.Trim().ToLowerInvariant() is "no_speech" or "no_speech_detected" or "empty_transcription";
 
-    /// <summary>If scores look like 0–1 ratios, lift them to 0–100.</summary>
-    private static double? NormalizeScore(double? score)
+    /// <summary>
+    /// Read component scores without converting missing evidence to zero.
+    /// When JSON snapshot exists, trust its nullability over legacy DB zeros.
+    /// </summary>
+    private static double? ReadNullableComponent(
+        double? topLevel,
+        double? analysisLevel,
+        decimal? dbValue,
+        bool snapshotHadScores)
     {
-        if (score is null)
+        if (topLevel is not null)
+        {
+            return topLevel;
+        }
+
+        if (analysisLevel is not null)
+        {
+            return analysisLevel;
+        }
+
+        // Snapshot present but component omitted/null → no evidence (do not use coerced DB 0).
+        if (snapshotHadScores)
         {
             return null;
         }
 
-        double value = score.Value;
-        if (value is >= 0 and <= 1.5)
+        // Legacy rows without EvaluationJson: only trust non-zero DB values as weak signal;
+        // zero remains ambiguous (could be coerced null) → treat as null for fluency/pronunciation.
+        if (dbValue is null || dbValue.Value == 0m)
         {
-            value *= 100;
+            return null;
         }
 
-        return Math.Clamp(Math.Round(value, 2), 0, 100);
+        return (double)dbValue.Value;
     }
 
     private static AiEvaluateAttemptV2Response? Deserialize(string? json)

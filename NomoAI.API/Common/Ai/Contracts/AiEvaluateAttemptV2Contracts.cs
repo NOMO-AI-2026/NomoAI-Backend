@@ -180,10 +180,10 @@ public sealed class AiSpeechAnalysisScoreDto
     public double? AccuracyScore { get; init; }
 
     [JsonPropertyName("completenessScore")]
-    public double CompletenessScore { get; init; }
+    public double? CompletenessScore { get; init; }
 
     [JsonPropertyName("fluencyScore")]
-    public double FluencyScore { get; init; }
+    public double? FluencyScore { get; init; }
 
     [JsonPropertyName("pronunciationProxyScore")]
     public double? PronunciationProxyScore { get; init; }
@@ -192,7 +192,7 @@ public sealed class AiSpeechAnalysisScoreDto
     public double? RelevanceScore { get; init; }
 
     [JsonPropertyName("overallScore")]
-    public double OverallScore { get; init; }
+    public double? OverallScore { get; init; }
 
     [JsonPropertyName("matched")]
     public bool Matched { get; init; }
@@ -218,6 +218,7 @@ public sealed class AiSpeechAnalysisScoreDto
 /// target_based (accuracy/pronunciation/fluency/completeness/overall/matched) or
 /// conversation (relevance/fluency/completeness/overall/matched). Both shapes bind
 /// into this one flexible DTO; irrelevant fields for the given kind stay null/default.
+/// Phase 2: fluency/pronunciation may be null when evidence is absent (null ≠ 0).
 /// </summary>
 public sealed class AiEvaluateScoreDto
 {
@@ -234,13 +235,13 @@ public sealed class AiEvaluateScoreDto
     public double? Relevance { get; init; }
 
     [JsonPropertyName("fluency")]
-    public double Fluency { get; init; }
+    public double? Fluency { get; init; }
 
     [JsonPropertyName("completeness")]
-    public double Completeness { get; init; }
+    public double? Completeness { get; init; }
 
     [JsonPropertyName("overall")]
-    public double Overall { get; init; }
+    public double? Overall { get; init; }
 
     [JsonPropertyName("matched")]
     public bool Matched { get; init; }

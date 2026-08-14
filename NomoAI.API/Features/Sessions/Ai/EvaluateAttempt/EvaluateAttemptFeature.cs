@@ -263,10 +263,10 @@ public sealed class EvaluateAttemptCommandHandler
                     : new AiScoreBreakdownDto
                     {
                         AccuracyScore = v2.Scores.AccuracyScore ?? 0,
-                        CompletenessScore = v2.Scores.CompletenessScore,
+                        CompletenessScore = v2.Scores.CompletenessScore ?? 0,
                         FluencyScore = v2.Scores.FluencyScore,
-                        PronunciationProxyScore = v2.Scores.PronunciationProxyScore ?? 0,
-                        OverallScore = v2.Scores.OverallScore,
+                        PronunciationProxyScore = v2.Scores.PronunciationProxyScore,
+                        OverallScore = v2.Scores.OverallScore ?? 0,
                         Matched = v2.Scores.Matched,
                         ReasonCodes = v2.Scores.ReasonCodes,
                         ScoringMethod = v2.Scores.ScoringMethod,

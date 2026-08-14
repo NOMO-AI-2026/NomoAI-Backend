@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NomoAI.API.Domain.Entities;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Persistence;
@@ -18,7 +19,8 @@ internal static class SessionSummaryPersister
     public static async Task TryPersistForCompletedSessionAsync(
         AppDbContext db,
         Session session,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         if (session.Status != SessionStatus.Completed)
         {
@@ -38,17 +40,10 @@ internal static class SessionSummaryPersister
                 s => s.SessionId == session.Id && !s.IsDeleted,
                 cancellationToken);
 
-        bool shouldRewrite = existing is null
-            || existing.SummaryGenerationMode != "db_analytics"
-            || existing.TotalAttempts != signals.Count;
-
-        if (!shouldRewrite)
-        {
-            return;
-        }
-
+        // Always refresh analytics on completion so evidence-aware fixes apply
+        // even when attempt count is unchanged (e.g. after score nullability fixes).
         SessionSummaryAnalytics.ComputedAnalytics analytics =
-            SessionSummaryAnalytics.Compute(session, signals);
+            SessionSummaryAnalytics.Compute(session, signals, logger);
 
         if (existing is null)
         {

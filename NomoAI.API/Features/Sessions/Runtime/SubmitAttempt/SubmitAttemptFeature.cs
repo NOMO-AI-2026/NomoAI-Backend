@@ -263,8 +263,8 @@ internal sealed class SubmitAttemptCommandHandler
         {
             Attempt = attempt,
             AccuracyScore = (decimal)(scores?.Accuracy ?? analysisScores?.AccuracyScore ?? 0),
-            FluencyScore = (decimal)(scores?.Fluency ?? analysisScores?.FluencyScore ?? 0),
-            PronunciationScore = (decimal)(scores?.Pronunciation ?? analysisScores?.PronunciationProxyScore ?? 0),
+            FluencyScore = ToNullableDecimal(scores?.Fluency ?? analysisScores?.FluencyScore),
+            PronunciationScore = ToNullableDecimal(scores?.Pronunciation ?? analysisScores?.PronunciationProxyScore),
             CompletenessScore = (decimal)(scores?.Completeness ?? analysisScores?.CompletenessScore ?? 0),
             Feedback = spokenText,
             IsSuccessful = scores?.Matched ?? analysisScores?.Matched ?? false,
@@ -473,6 +473,9 @@ internal sealed class SubmitAttemptCommandHandler
     }
 
     /// <summary>Move to the next plan step, or complete only when no steps remain.</summary>
+    private static decimal? ToNullableDecimal(double? value) =>
+        value is null ? null : Convert.ToDecimal(value.Value);
+
     private static void AdvanceOrComplete(Session session, AiSessionPlanV2Response plan)
     {
         session.CurrentAttemptNumber = 0;

@@ -51,6 +51,15 @@ internal sealed class GetAttemptAudioQueryHandler
             return Result.Failure<AttemptAudioResult>(SessionRuntimeErrors.Forbidden);
         }
 
+        bool isDoctor = await _db.Doctor
+            .AsNoTracking()
+            .AnyAsync(d => d.UserId == request.UserId && !d.IsDeleted, cancellationToken);
+
+        if (!isDoctor)
+        {
+            return Result.Failure<AttemptAudioResult>(SessionRuntimeErrors.Forbidden);
+        }
+
         var attempt = await _db.SessionAttempts
             .AsNoTracking()
             .Where(a => a.Id == request.AttemptId && a.SessionId == request.SessionId && !a.IsDeleted)
@@ -84,9 +93,9 @@ public sealed class GetAttemptAudioEndpoint : IEndpoint
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/sessions/{sessionId:int}/attempts/{attemptId:int}/audio", HandleAsync)
-            .RequireAuthorization(policy => policy.RequireRole("Doctor", "Parent"))
+            .RequireAuthorization(policy => policy.RequireRole("Doctor"))
             .WithName("GetAttemptAudio")
-            .WithSummary("Stream the persisted child attempt audio for doctor/parent review")
+            .WithSummary("Stream the persisted child attempt audio for doctor review")
             .WithTags("Sessions Runtime")
             .Produces(StatusCodes.Status200OK, contentType: "audio/webm")
             .Produces(StatusCodes.Status401Unauthorized)

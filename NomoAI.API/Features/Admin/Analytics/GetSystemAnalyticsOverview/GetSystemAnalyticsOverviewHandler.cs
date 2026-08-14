@@ -205,9 +205,16 @@ internal sealed class GetSystemAnalyticsOverviewHandler
                 ActivitiesTotal: activitiesTotal,
                 SessionsTotal: sessionsTotal,
                 SessionsByStatus: new SessionsByStatusResponse(
-                    Scheduled: sessionsScheduled,
-                    InProgress: sessionsInProgress,
-                    Completed: sessionsCompleted),
+                    Scheduled: sessionStatusCounts.GetValueOrDefault(
+                        SessionStatus.Scheduled),
+                    InProgress: sessionStatusCounts.GetValueOrDefault(
+                        SessionStatus.InProgress),
+                    Completed: sessionStatusCounts.GetValueOrDefault(
+                        SessionStatus.Completed),
+                    Cancelled: sessionStatusCounts.GetValueOrDefault(
+                        SessionStatus.Cancelled),
+                    Missed: sessionStatusCounts.GetValueOrDefault(
+                        SessionStatus.Missed)),
                 SessionAttemptsTotal: sessionAttemptsTotal,
                 SessionSummariesTotal: sessionSummariesTotal,
                 AttemptEvaluationsTotal: attemptEvaluationsTotal,

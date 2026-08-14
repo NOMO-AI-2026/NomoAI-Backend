@@ -31,9 +31,9 @@ public sealed class SessionAttemptEvaluationResponse
 {
     public decimal AccuracyScore { get; init; }
 
-    public decimal FluencyScore { get; init; }
+    public decimal? FluencyScore { get; init; }
 
-    public decimal PronunciationScore { get; init; }
+    public decimal? PronunciationScore { get; init; }
 
     public decimal CompletenessScore { get; init; }
 

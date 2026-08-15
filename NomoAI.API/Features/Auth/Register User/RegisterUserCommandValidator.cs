@@ -1,4 +1,5 @@
 using FluentValidation;
+using NomoAI.API.Common.DoctorDocuments;
 using NomoAI.API.Common.Enums;
 
 namespace NomoAI.API.Features.Auth.Register_User;
@@ -36,6 +37,30 @@ public sealed class RegisterUserCommandValidator
                 .When(command => command.ProfessionalBio is not null)
                 .WithMessage(
                     $"Professional bio cannot exceed {MaxProfessionalBioLength} characters.");
+
+            // URLs are produced server-side from uploaded files, not supplied by the client.
+            RuleFor(command => command.IdentityDocumentUrl)
+                .NotEmpty()
+                .WithMessage("Identity document is required for doctor registration.")
+                .MaximumLength(DoctorDocumentLimits.MaxUrlLength);
+
+            RuleFor(command => command.PracticeLicenseUrl)
+                .NotEmpty()
+                .WithMessage("Practice license is required for doctor registration.")
+                .MaximumLength(DoctorDocumentLimits.MaxUrlLength);
+
+            RuleFor(command => command.SyndicateCardUrl)
+                .NotEmpty()
+                .WithMessage("Syndicate card is required for doctor registration.")
+                .MaximumLength(DoctorDocumentLimits.MaxUrlLength);
+
+            RuleFor(command => command.SyndicateRegistrationNumber)
+                .Cascade(CascadeMode.StopOnFirstFailure)
+                .NotEmpty()
+                .WithMessage("Syndicate registration number is required for doctor registration.")
+                .MaximumLength(DoctorDocumentLimits.MaxSyndicateRegistrationNumberLength)
+                .WithMessage(
+                    $"Syndicate registration number cannot exceed {DoctorDocumentLimits.MaxSyndicateRegistrationNumberLength} characters.");
         });
     }
 }

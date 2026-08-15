@@ -25,5 +25,13 @@ namespace NomoAI.API.Features.Auth.Register_User
         public string? ClinicName { get; set; }
 
         public string? ProfessionalBio { get; set; }
+
+        public string? IdentityDocumentUrl { get; set; }
+
+        public string? PracticeLicenseUrl { get; set; }
+
+        public string? SyndicateCardUrl { get; set; }
+
+        public string? SyndicateRegistrationNumber { get; set; }
     }
 }

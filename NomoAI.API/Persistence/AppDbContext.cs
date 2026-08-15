@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using NomoAI.API.Common.DoctorDocuments;
 using NomoAI.API.Domain.Entities;
 using NomoDoc.Domain.Entities;
 
@@ -159,6 +160,21 @@ namespace NomoAI.API.Persistence
                     .HasIndex(link => link.Idempotency)
                     .IsUnique()
                     .HasFilter("[IsDeleted] = 0");
+            });
+
+            builder.Entity<Doctor>(entity =>
+            {
+                entity.Property(doctor => doctor.IdentityDocumentUrl)
+                    .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
+
+                entity.Property(doctor => doctor.PracticeLicenseUrl)
+                    .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
+
+                entity.Property(doctor => doctor.SyndicateCardUrl)
+                    .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
+
+                entity.Property(doctor => doctor.SyndicateRegistrationNumber)
+                    .HasMaxLength(DoctorDocumentLimits.MaxSyndicateRegistrationNumberLength);
             });
 
             builder.Entity<DoctorCreditWallet>(entity =>

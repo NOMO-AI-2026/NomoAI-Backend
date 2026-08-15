@@ -40,6 +40,7 @@ namespace NomoAI.API.Features.Profile.UpdateUserProfile
                 doctor.YearsOfExperience = request.Request.DoctorSpecificData.YearsOfExperience;
                 doctor.ClinicName = request.Request.DoctorSpecificData.ClinicName;
                 doctor.ProfessionalBio = request.Request.DoctorSpecificData.ProfessionalBio;
+                // Verification documents are read-only on profile update; they are set at registration.
             }
 
             await _db.SaveChangesAsync(cancellationToken);

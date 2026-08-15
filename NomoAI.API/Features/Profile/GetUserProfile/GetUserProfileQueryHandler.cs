@@ -43,6 +43,10 @@ namespace NomoAI.API.Features.Profile.GetUserProfile
                     YearsOfExperience = d.YearsOfExperience,
                     ClinicName = d.ClinicName,
                     ProfessionalBio = d.ProfessionalBio,
+                    IdentityDocumentUrl = d.IdentityDocumentUrl,
+                    PracticeLicenseUrl = d.PracticeLicenseUrl,
+                    SyndicateCardUrl = d.SyndicateCardUrl,
+                    SyndicateRegistrationNumber = d.SyndicateRegistrationNumber,
                     AvailableMinutes = d.creditWallet.AvailableMinutes
                 })
                 .SingleOrDefaultAsync(cancellationToken);

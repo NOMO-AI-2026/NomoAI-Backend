@@ -7,12 +7,19 @@
         public string? ProfessionalBio { get; set; }
 
         /// <summary>
-        /// Verification documents submitted at registration. Returned for the
-        /// owning doctor to review; UpdateUserProfile does not change these fields.
+        /// Active verification documents. Replacement files submitted via
+        /// PUT /api/profile/doctor-documents appear as pending until an admin accepts them.
+        /// UpdateUserProfile does not change these fields.
         /// </summary>
         public string? PracticeLicenseUrl { get; set; }
 
         public string? SyndicateCardUrl { get; set; }
+
+        public string? PendingPracticeLicenseUrl { get; set; }
+
+        public string? PendingSyndicateCardUrl { get; set; }
+
+        public bool HasPendingDocuments { get; set; }
 
         public int AvailableMinutes { get ; set; }
     }

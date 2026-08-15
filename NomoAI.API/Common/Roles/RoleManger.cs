@@ -138,6 +138,8 @@ namespace NomoAI.API.Common.Roles
             doctor.ProfessionalBio = doctorProfile?.ProfessionalBio;
             doctor.PracticeLicenseUrl = doctorProfile?.PracticeLicenseUrl?.Trim();
             doctor.SyndicateCardUrl = doctorProfile?.SyndicateCardUrl?.Trim();
+            doctor.PendingPracticeLicenseUrl = null;
+            doctor.PendingSyndicateCardUrl = null;
         }
 
         private async Task EnsureDoctorWalletAsync(int doctorId)

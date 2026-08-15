@@ -19,5 +19,11 @@
         public string? PracticeLicenseUrl { get; set; }
 
         public string? SyndicateCardUrl { get; set; }
+
+        public string? PendingPracticeLicenseUrl { get; set; }
+
+        public string? PendingSyndicateCardUrl { get; set; }
+
+        public bool HasPendingDocuments { get; set; }
     }
 }

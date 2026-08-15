@@ -14,8 +14,8 @@ public sealed class GetDoctorDetailsEndpoint : IEndpoint
             .WithTags("AdminDashboard")
             .WithSummary("Get doctor details including verification documents")
             .WithDescription(
-                "Returns profile, approval status, and verification document URLs " +
-                "for a non-deleted doctor so an admin can review before approval.")
+                "Returns profile, approval status, active verification documents, and any pending " +
+                "replacement documents for a non-deleted doctor.")
             .Produces<Result<DoctorDetailsResponse>>(StatusCodes.Status200OK)
             .Produces<Error>(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)

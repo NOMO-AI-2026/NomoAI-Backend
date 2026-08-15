@@ -169,6 +169,12 @@ namespace NomoAI.API.Persistence
 
                 entity.Property(doctor => doctor.SyndicateCardUrl)
                     .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
+
+                entity.Property(doctor => doctor.PendingPracticeLicenseUrl)
+                    .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
+
+                entity.Property(doctor => doctor.PendingSyndicateCardUrl)
+                    .HasMaxLength(DoctorDocumentLimits.MaxUrlLength);
             });
 
             builder.Entity<DoctorCreditWallet>(entity =>

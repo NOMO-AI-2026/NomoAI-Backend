@@ -62,7 +62,7 @@ namespace NomoAI.API.Features.Auth
 
         public static readonly Error DoctorMultipartRequired = new(
             "Auth.DoctorMultipartRequired",
-            "Doctor registration must be sent as multipart/form-data with identityDocument, practiceLicense, syndicateCard, and syndicateRegistrationNumber.",
+            "Doctor registration must be sent as multipart/form-data with practiceLicense and syndicateCard.",
             StatusCodes.Status400BadRequest);
 
         public static readonly Error ParentJsonRequired = new(

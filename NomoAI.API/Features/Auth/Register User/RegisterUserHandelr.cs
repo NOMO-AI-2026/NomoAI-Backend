@@ -45,10 +45,8 @@ public sealed class RegisterUserHandler
                     request.YearsOfExperience,
                     request.ClinicName,
                     request.ProfessionalBio,
-                    request.IdentityDocumentUrl,
                     request.PracticeLicenseUrl,
-                    request.SyndicateCardUrl,
-                    request.SyndicateRegistrationNumber)
+                    request.SyndicateCardUrl)
                 : null;
 
         if (existingUser != null)

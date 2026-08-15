@@ -16,7 +16,6 @@ public sealed class DoctorDocumentStorage
     }
 
     public async Task<Result<SavedDoctorDocuments>> SaveAsync(
-        DoctorDocumentFile identityDocument,
         DoctorDocumentFile practiceLicense,
         DoctorDocumentFile syndicateCard,
         string publicApiBaseUrl,
@@ -37,12 +36,6 @@ public sealed class DoctorDocumentStorage
         {
             Directory.CreateDirectory(folderPath);
 
-            string identityFileName = await SaveFileAsync(
-                identityDocument,
-                folderPath,
-                "identity",
-                cancellationToken);
-
             string licenseFileName = await SaveFileAsync(
                 practiceLicense,
                 folderPath,
@@ -58,9 +51,6 @@ public sealed class DoctorDocumentStorage
             return Result.Success(
                 new SavedDoctorDocuments(
                     folderPath,
-                    DoctorDocumentPublicUrl.Build(
-                        DoctorDocumentPublicUrl.BuildRelativePath(folderId, identityFileName),
-                        publicApiBaseUrl),
                     DoctorDocumentPublicUrl.Build(
                         DoctorDocumentPublicUrl.BuildRelativePath(folderId, licenseFileName),
                         publicApiBaseUrl),

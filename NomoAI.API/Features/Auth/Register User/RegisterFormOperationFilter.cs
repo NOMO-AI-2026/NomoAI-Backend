@@ -19,27 +19,36 @@ public sealed class RegisterFormOperationFilter : IOperationFilter
 
         operation.Parameters?.Clear();
 
+        // Put multipart first so Swagger UI defaults to Doctor file uploads (Browse buttons).
+        // Parent JSON remains available from the media-type dropdown.
         operation.RequestBody = new OpenApiRequestBody
         {
             Required = true,
             Description =
-                "Parent: application/json. Doctor: multipart/form-data with three verification files " +
-                "and syndicateRegistrationNumber in a single request.",
+                "Doctor (default): multipart/form-data — use Browse for practiceLicense and syndicateCard.\n" +
+                "Parent: switch media type to application/json (no files).",
             Content =
             {
-                ["application/json"] = new OpenApiMediaType
-                {
-                    Schema = BuildJsonSchema()
-                },
                 ["multipart/form-data"] = new OpenApiMediaType
                 {
                     Schema = BuildMultipartSchema(),
                     Encoding = new Dictionary<string, OpenApiEncoding>
                     {
-                        ["identityDocument"] = new OpenApiEncoding { Style = ParameterStyle.Form },
-                        ["practiceLicense"] = new OpenApiEncoding { Style = ParameterStyle.Form },
-                        ["syndicateCard"] = new OpenApiEncoding { Style = ParameterStyle.Form }
+                        ["practiceLicense"] = new OpenApiEncoding
+                        {
+                            Style = ParameterStyle.Form,
+                            ContentType = "application/octet-stream"
+                        },
+                        ["syndicateCard"] = new OpenApiEncoding
+                        {
+                            Style = ParameterStyle.Form,
+                            ContentType = "application/octet-stream"
+                        }
                     }
+                },
+                ["application/json"] = new OpenApiMediaType
+                {
+                    Schema = BuildJsonSchema()
                 }
             }
         };
@@ -90,10 +99,8 @@ public sealed class RegisterFormOperationFilter : IOperationFilter
                 "age",
                 "gender",
                 "role",
-                "identityDocument",
                 "practiceLicense",
-                "syndicateCard",
-                "syndicateRegistrationNumber"
+                "syndicateCard"
             },
             Properties = new Dictionary<string, OpenApiSchema>
             {
@@ -107,17 +114,6 @@ public sealed class RegisterFormOperationFilter : IOperationFilter
                 ["yearsOfExperience"] = new OpenApiSchema { Type = "integer", Format = "int32", Nullable = true },
                 ["clinicName"] = new OpenApiSchema { Type = "string", Nullable = true },
                 ["professionalBio"] = new OpenApiSchema { Type = "string", Nullable = true },
-                ["syndicateRegistrationNumber"] = new OpenApiSchema
-                {
-                    Type = "string",
-                    Description = "Doctors' Syndicate registration number."
-                },
-                ["identityDocument"] = new OpenApiSchema
-                {
-                    Type = "string",
-                    Format = "binary",
-                    Description = "National ID or passport (JPEG, PNG, or PDF, max 5MB)."
-                },
                 ["practiceLicense"] = new OpenApiSchema
                 {
                     Type = "string",

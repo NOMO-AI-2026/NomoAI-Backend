@@ -23,8 +23,8 @@ public class RegisterEndpoint : IEndpoint
             .WithDescription(
                 "Parent: POST application/json with the existing account fields. Document files are not required.\n" +
                 "Doctor: POST multipart/form-data in a single request with account fields plus " +
-                "identityDocument, practiceLicense, syndicateCard (JPEG/PNG/PDF, max 5MB each) " +
-                "and syndicateRegistrationNumber. Role = 0 (Doctor) or 1 (Parent). " +
+                "practiceLicense and syndicateCard (JPEG/PNG/PDF, max 5MB each). " +
+                "Role = 0 (Doctor) or 1 (Parent). " +
                 "Gender = 0 (Male) or 1 (Female). Doctor JSON-only register is rejected.")
             .Produces<Result<RegisterResponseDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
@@ -135,7 +135,6 @@ public class RegisterEndpoint : IEndpoint
         }
 
         Result<SavedDoctorDocuments> saveResult = await documentStorage.SaveAsync(
-            bound.IdentityDocument,
             bound.PracticeLicense,
             bound.SyndicateCard,
             publicApiBaseUrl,
@@ -160,10 +159,8 @@ public class RegisterEndpoint : IEndpoint
             YearsOfExperience = bound.YearsOfExperience,
             ClinicName = bound.ClinicName,
             ProfessionalBio = bound.ProfessionalBio,
-            IdentityDocumentUrl = saved.IdentityDocumentUrl,
             PracticeLicenseUrl = saved.PracticeLicenseUrl,
-            SyndicateCardUrl = saved.SyndicateCardUrl,
-            SyndicateRegistrationNumber = bound.SyndicateRegistrationNumber
+            SyndicateCardUrl = saved.SyndicateCardUrl
         };
 
         Result<RegisterResponseDto> result =

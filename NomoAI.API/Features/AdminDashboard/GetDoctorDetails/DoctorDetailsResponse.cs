@@ -26,13 +26,9 @@ public sealed class DoctorDetailsResponse
 
     public string? ProfessionalBio { get; init; }
 
-    public string? IdentityDocumentUrl { get; init; }
-
     public string? PracticeLicenseUrl { get; init; }
 
     public string? SyndicateCardUrl { get; init; }
-
-    public string? SyndicateRegistrationNumber { get; init; }
 
     public DateTime CreatedAt { get; init; }
 }

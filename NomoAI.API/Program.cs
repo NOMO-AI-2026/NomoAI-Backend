@@ -410,7 +410,7 @@ namespace NomoAI.API
             builder.WebHost.ConfigureKestrel(options =>
             {
                 const long doctorDocumentsMaxBytes =
-                    (DoctorDocumentLimits.MaxFileBytes * 3) + (1024 * 1024);
+                    (DoctorDocumentLimits.MaxFileBytes * 2) + (1024 * 1024);
 
                 options.Limits.MaxRequestBodySize = Math.Max(
                     AiServiceOptions.DefaultMaxAudioBytes + (1024 * 1024),

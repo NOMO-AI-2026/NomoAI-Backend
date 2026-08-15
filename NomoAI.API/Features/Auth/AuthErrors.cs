@@ -59,6 +59,26 @@ namespace NomoAI.API.Features.Auth
         "Auth.EmailDeliveryFailed",
         "The verification email could not be sent. Please try again later.",
         StatusCodes.Status503ServiceUnavailable);
+
+        public static readonly Error DoctorMultipartRequired = new(
+            "Auth.DoctorMultipartRequired",
+            "Doctor registration must be sent as multipart/form-data with identityDocument, practiceLicense, syndicateCard, and syndicateRegistrationNumber.",
+            StatusCodes.Status400BadRequest);
+
+        public static readonly Error ParentJsonRequired = new(
+            "Auth.ParentJsonRequired",
+            "Parent registration must be sent as application/json.",
+            StatusCodes.Status400BadRequest);
+
+        public static readonly Error UnsupportedRegisterContentType = new(
+            "Auth.UnsupportedRegisterContentType",
+            "Register accepts application/json for Parent or multipart/form-data for Doctor.",
+            StatusCodes.Status415UnsupportedMediaType);
+
+        public static readonly Error InvalidRegisterBody = new(
+            "Auth.InvalidRegisterBody",
+            "The register request body is invalid.",
+            StatusCodes.Status400BadRequest);
     }
 
 }

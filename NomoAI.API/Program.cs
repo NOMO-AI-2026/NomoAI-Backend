@@ -11,6 +11,7 @@ using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions.Email;
 using NomoAI.API.Common.Ai;
 using NomoAI.API.Common.Behaviors;
+using NomoAI.API.Common.DoctorDocuments;
 using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.EmailOtp;
 using NomoAI.API.Common.Jwt;
@@ -22,6 +23,7 @@ using NomoAI.API.Domain.Entities;
 using NomoAI.API.Features.Activities;
 using NomoAI.API.Features.Admin;
 using NomoAI.API.Features.Auth;
+using NomoAI.API.Features.Auth.Register_User;
 using NomoAI.API.Features.Children;
 using NomoAI.API.Features.Parents;
 using NomoAI.API.Features.Sessions;
@@ -64,6 +66,7 @@ namespace NomoAI.API
                 });
 
                 options.OperationFilter<EvaluateAttemptFormOperationFilter>();
+                options.OperationFilter<RegisterFormOperationFilter>();
 
                 options.AddSecurityDefinition(
                     "Bearer",
@@ -399,14 +402,19 @@ namespace NomoAI.API
 
             //Role Manger 
             builder.Services.AddScoped<IRoleManger , RoleManger>();
+            builder.Services.AddSingleton<DoctorDocumentStorage>();
 
             // AI Core (FastAPI) integration
             builder.Services.AddAiService(builder.Configuration);
 
             builder.WebHost.ConfigureKestrel(options =>
             {
-                options.Limits.MaxRequestBodySize =
-                    AiServiceOptions.DefaultMaxAudioBytes + (1024 * 1024);
+                const long doctorDocumentsMaxBytes =
+                    (DoctorDocumentLimits.MaxFileBytes * 3) + (1024 * 1024);
+
+                options.Limits.MaxRequestBodySize = Math.Max(
+                    AiServiceOptions.DefaultMaxAudioBytes + (1024 * 1024),
+                    doctorDocumentsMaxBytes);
             });
             //Payment 
             builder.Services.AddScoped<IPayMobService, PayMobService>();
@@ -434,6 +442,7 @@ namespace NomoAI.API
             }
 
             app.UseCors("MyPolicy");
+            app.UseStaticFiles();
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseHangfireDashboard("/jobs");

@@ -3,4 +3,8 @@ namespace NomoAI.API.Common.Roles;
 public sealed record DoctorRegistrationProfile(
     int? YearsOfExperience = null,
     string? ClinicName = null,
-    string? ProfessionalBio = null);
+    string? ProfessionalBio = null,
+    string? IdentityDocumentUrl = null,
+    string? PracticeLicenseUrl = null,
+    string? SyndicateCardUrl = null,
+    string? SyndicateRegistrationNumber = null);

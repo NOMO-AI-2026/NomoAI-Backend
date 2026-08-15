@@ -44,7 +44,11 @@ public sealed class RegisterUserHandler
                 ? new DoctorRegistrationProfile(
                     request.YearsOfExperience,
                     request.ClinicName,
-                    request.ProfessionalBio)
+                    request.ProfessionalBio,
+                    request.IdentityDocumentUrl,
+                    request.PracticeLicenseUrl,
+                    request.SyndicateCardUrl,
+                    request.SyndicateRegistrationNumber)
                 : null;
 
         if (existingUser != null)

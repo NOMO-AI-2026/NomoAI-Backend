@@ -373,6 +373,10 @@ scripts/aspnet-*.json
 scripts/ai-demo-*.json
 scripts/plan-*.json
 
+# Local doctor verification document uploads (URLs are stored in the database)
+NomoAI.API/wwwroot/uploads/doctor-documents/**
+!NomoAI.API/wwwroot/uploads/doctor-documents/.gitkeep
+
 # Elastic Beanstalk local publish artifacts
 publish-eb/
 nomoai-api-eb.zip

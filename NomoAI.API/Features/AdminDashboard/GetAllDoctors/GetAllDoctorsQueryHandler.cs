@@ -28,6 +28,10 @@ namespace NomoAI.API.Features.AdminDashboard.GetAllDoctors
                     YearsOfExperience = d.YearsOfExperience,
                     ClinicName = d.ClinicName,
                     ProfessionalBio = d.ProfessionalBio,
+                    IdentityDocumentUrl = d.IdentityDocumentUrl,
+                    PracticeLicenseUrl = d.PracticeLicenseUrl,
+                    SyndicateCardUrl = d.SyndicateCardUrl,
+                    SyndicateRegistrationNumber = d.SyndicateRegistrationNumber,
                 })
                 .OrderBy(d => d.FullName)
                 .AsQueryable();

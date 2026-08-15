@@ -1,31 +1,38 @@
 using NomoAI.API.Domain.Enums;
 
-namespace NomoAI.API.Features.AdminDashboard.GetDoctorDetails
+namespace NomoAI.API.Features.AdminDashboard.GetDoctorDetails;
+
+public sealed class DoctorDetailsResponse
 {
-    public sealed class DoctorDetailsResponse
-    {
-        public int Id { get; set; }
+    public int Id { get; init; }
 
-        public string UserId { get; set; } = null!;
+    public required string UserId { get; init; }
 
-        public string FullName { get; set; } = null!;
+    public required string FullName { get; init; }
 
-        public string Email { get; set; } = null!;
+    public required string Email { get; init; }
 
-        public string? PhoneNumber { get; set; }
+    public string? PhoneNumber { get; init; }
 
-        public int Age { get; set; }
+    public Gender Gender { get; init; }
 
-        public Gender Gender { get; set; }
+    public int Age { get; init; }
 
-        public int? YearsOfExperience { get; set; }
+    public bool IsApproved { get; init; }
 
-        public string? ClinicName { get; set; }
+    public int? YearsOfExperience { get; init; }
 
-        public string? ProfessionalBio { get; set; }
+    public string? ClinicName { get; init; }
 
-        public bool IsApproved { get; set; }
+    public string? ProfessionalBio { get; init; }
 
-        public DateTime CreatedAt { get; set; }
-    }
+    public string? IdentityDocumentUrl { get; init; }
+
+    public string? PracticeLicenseUrl { get; init; }
+
+    public string? SyndicateCardUrl { get; init; }
+
+    public string? SyndicateRegistrationNumber { get; init; }
+
+    public DateTime CreatedAt { get; init; }
 }

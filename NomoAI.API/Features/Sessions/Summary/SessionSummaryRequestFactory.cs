@@ -19,9 +19,17 @@ internal static class SessionSummaryRequestFactory
                 from a in db.SessionAttempts.AsNoTracking()
                 join e in db.AttemptEvaluations.AsNoTracking() on a.Id equals e.AttemptId
                 where a.SessionId == session.Id && !a.IsDeleted && !e.IsDeleted
-                orderby a.AttemptNumber
+                orderby a.AttemptNumber, a.Id
                 select new ValueTuple<SessionAttempts, AttemptEvaluation>(a, e))
             .ToListAsync(cancellationToken);
+
+        // 1 DB attempt → 1 summary attempt (dedupe join accidents).
+        rows = rows
+            .GroupBy(r => r.Attempt.Id)
+            .Select(g => g.First())
+            .OrderBy(r => r.Attempt.AttemptNumber)
+            .ThenBy(r => r.Attempt.Id)
+            .ToList();
 
         if (rows.Count == 0)
         {
@@ -32,42 +40,59 @@ internal static class SessionSummaryRequestFactory
         foreach ((SessionAttempts attempt, AttemptEvaluation evaluation) in rows)
         {
             AiEvaluateAttemptV2Response? snapshot = DeserializeEvaluation(evaluation.EvaluationJson);
+            bool snapshotHadScores = snapshot?.Scores is not null || snapshot?.SpeechAnalysis?.Scores is not null;
 
-            double? overall = snapshot?.Scores?.Overall
-                ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore
-                ?? (double?)evaluation.AccuracyScore; // fallback soft signal
+            double? accuracy = snapshot?.Scores?.Accuracy
+                ?? snapshot?.SpeechAnalysis?.Scores?.AccuracyScore
+                ?? (double)evaluation.AccuracyScore;
 
-            // Prefer AI overall when present; otherwise average the four stored component scores.
-            if (snapshot?.Scores?.Overall is null && snapshot?.SpeechAnalysis?.Scores?.OverallScore is null)
+            double? completeness = snapshot?.Scores?.Completeness
+                ?? snapshot?.SpeechAnalysis?.Scores?.CompletenessScore
+                ?? (double)evaluation.CompletenessScore;
+
+            double? fluency = snapshot?.Scores?.Fluency
+                ?? snapshot?.SpeechAnalysis?.Scores?.FluencyScore;
+            if (fluency is null && !snapshotHadScores && evaluation.FluencyScore is decimal dbFluency and not 0)
             {
-                overall = (double)(
-                    (evaluation.AccuracyScore
-                     + evaluation.FluencyScore
-                     + evaluation.PronunciationScore
-                     + evaluation.CompletenessScore) / 4m);
+                fluency = (double)dbFluency;
+            }
+
+            double? pronunciation = snapshot?.Scores?.Pronunciation
+                ?? snapshot?.SpeechAnalysis?.Scores?.PronunciationProxyScore;
+            if (pronunciation is null && !snapshotHadScores && evaluation.PronunciationScore is decimal dbPron and not 0)
+            {
+                pronunciation = (double)dbPron;
+            }
+
+            double? overall = EvidenceAwareScoreMath.ResolveOverall(
+                snapshot?.Scores?.Overall ?? snapshot?.SpeechAnalysis?.Scores?.OverallScore,
+                accuracy,
+                completeness,
+                fluency,
+                pronunciation);
+
+            string speechOutcome = evaluation.SpeechOutcome
+                ?? snapshot?.SpeechOutcome
+                ?? "scored";
+
+            if (speechOutcome.Trim().ToLowerInvariant() is "no_speech" or "no_speech_detected" or "empty_transcription")
+            {
+                overall = null;
             }
 
             attempts.Add(new AiSummaryAttemptInput
             {
                 AttemptNumber = attempt.AttemptNumber,
                 OverallScore = overall,
-                AccuracyScore = snapshot?.Scores?.Accuracy ?? (double)evaluation.AccuracyScore,
-                CompletenessScore = snapshot?.Scores?.Completeness
-                    ?? snapshot?.SpeechAnalysis?.Scores?.CompletenessScore
-                    ?? (double)evaluation.CompletenessScore,
-                FluencyScore = snapshot?.Scores?.Fluency
-                    ?? snapshot?.SpeechAnalysis?.Scores?.FluencyScore
-                    ?? (double)evaluation.FluencyScore,
-                PronunciationProxyScore = snapshot?.Scores?.Pronunciation
-                    ?? snapshot?.SpeechAnalysis?.Scores?.PronunciationProxyScore
-                    ?? (double)evaluation.PronunciationScore,
-                SpeechOutcome = evaluation.SpeechOutcome
-                    ?? snapshot?.SpeechOutcome
-                    ?? "scored",
+                AccuracyScore = accuracy,
+                CompletenessScore = completeness,
+                FluencyScore = fluency,
+                PronunciationProxyScore = pronunciation,
+                SpeechOutcome = speechOutcome,
                 AdaptiveAction = evaluation.AdaptiveAction
-                    ?? snapshot?.AdaptiveDecision.Action
+                    ?? snapshot?.AdaptiveDecision?.Action
                     ?? "retry_same",
-                ReasonCodes = snapshot?.AdaptiveDecision.ReasonCodes?.ToArray()
+                ReasonCodes = snapshot?.AdaptiveDecision?.ReasonCodes?.ToArray()
                     ?? Array.Empty<string>(),
                 KnowledgeSourceIds = ParseGuidList(evaluation.KnowledgeSourceIdsJson)
             });

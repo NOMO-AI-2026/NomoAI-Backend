@@ -15,13 +15,39 @@ namespace NomoDoc.Domain.Entities
 
         public decimal AccuracyScore { get; set; }
 
-        public decimal FluencyScore { get; set; }
+        /// <summary>Null when timing evidence was insufficient (Phase 2). Null ≠ 0.</summary>
+        public decimal? FluencyScore { get; set; }
 
-        public decimal PronunciationScore { get; set; }
+        /// <summary>Null when acoustic/phoneme evidence was absent (Phase 2). Null ≠ 0.</summary>
+        public decimal? PronunciationScore { get; set; }
 
         public decimal CompletenessScore { get; set; }
 
-        public decimal OverallScore => AccuracyScore + FluencyScore + PronunciationScore + CompletenessScore;
+        /// <summary>
+        /// Evidence-safe overall from available components only (null fluency/pronunciation omitted).
+        /// Prefer EvaluationJson scores.overall when present.
+        /// </summary>
+        public decimal? OverallScore
+        {
+            get
+            {
+                decimal sum = AccuracyScore + CompletenessScore;
+                int count = 2;
+                if (FluencyScore is decimal fluency)
+                {
+                    sum += fluency;
+                    count++;
+                }
+
+                if (PronunciationScore is decimal pronunciation)
+                {
+                    sum += pronunciation;
+                    count++;
+                }
+
+                return count == 0 ? null : Math.Round(sum / count, 2);
+            }
+        }
 
         public string? Feedback { get; set; }
 

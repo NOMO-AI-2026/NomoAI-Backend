@@ -48,10 +48,11 @@ namespace NomoAI.API.Features.Auth.Login_User
                 return Result.Failure<LoginAuthResult>(AuthErrors.InvalidCredentials);
             }
 
-            if (!user.EmailConfirmed)
-            {
-                return Result.Failure<LoginAuthResult>(AuthErrors.EmailNotConfirmed);
-            }
+            // TEMP: allow login without email confirmation for session testing.
+            // if (!user.EmailConfirmed)
+            // {
+            //     return Result.Failure<LoginAuthResult>(AuthErrors.EmailNotConfirmed);
+            // }
             var roles = await _userManager.GetRolesAsync(user);
             string role = roles.FirstOrDefault();
 

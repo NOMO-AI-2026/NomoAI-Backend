@@ -246,10 +246,10 @@ public sealed class AiScoreBreakdownDto
     public double CompletenessScore { get; init; }
 
     [JsonPropertyName("fluencyScore")]
-    public double FluencyScore { get; init; }
+    public double? FluencyScore { get; init; }
 
     [JsonPropertyName("pronunciationProxyScore")]
-    public double PronunciationProxyScore { get; init; }
+    public double? PronunciationProxyScore { get; init; }
 
     [JsonPropertyName("overallScore")]
     public double OverallScore { get; init; }

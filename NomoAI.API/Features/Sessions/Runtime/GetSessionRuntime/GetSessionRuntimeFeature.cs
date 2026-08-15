@@ -49,72 +49,80 @@ internal sealed class GetSessionRuntimeQueryHandler
             return Result.Failure<SessionRuntimeResponse>(SessionRuntimeErrors.Forbidden);
         }
 
+        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
+        bool statusChanged = SessionLifecycle.SynchronizePersistedStatus(session, plan);
+
+        if (statusChanged && session.Status == SessionStatus.Completed)
+        {
+            await SessionCompletion.FinalizeAsync(_db, session, cancellationToken);
+        }
+
+        if (statusChanged || _db.ChangeTracker.HasChanges())
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
         return Result.Success(BuildRuntimeResponse(session));
     }
 
     internal static SessionRuntimeResponse BuildRuntimeResponse(Session session)
     {
         string status = SessionRuntimeStatus.Map(session.Status);
-
-        if (session.Status != SessionStatus.InProgress)
-        {
-            AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
-            AiSessionStepDto? lastStep = plan is null
-                ? null
-                : SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
-
-            return new SessionRuntimeResponse
-            {
-                SessionId = session.Id,
-                Status = status,
-                CurrentStep = lastStep is null
-                    ? null
-                    : StartSessionCommandHandler.MapStep(lastStep, session.CurrentAttemptNumber),
-                Command = SessionRuntimeCommand.SessionCompleted,
-                ActivityType = session.ActivityType,
-                Prompt = session.Prompt
-            };
-        }
-
-        AiSessionPlanV2Response? inProgressPlan = SessionPlanSnapshot.Deserialize(session.PlanJson);
-        if (inProgressPlan is null)
-        {
-            return new SessionRuntimeResponse
-            {
-                SessionId = session.Id,
-                Status = status,
-                Command = SessionRuntimeCommand.SessionCompleted,
-                ActivityType = session.ActivityType,
-                Prompt = session.Prompt
-            };
-        }
-
-        AiSessionStepDto? currentStep = SessionPlanSnapshot.GetStep(inProgressPlan, session.CurrentStepNumber);
-        SessionRuntimeStepDto? mappedStep = currentStep is null
+        AiSessionPlanV2Response? plan = SessionPlanSnapshot.Deserialize(session.PlanJson);
+        AiSessionStepDto? currentPlanStep = plan is null
             ? null
-            : StartSessionCommandHandler.MapStep(currentStep, session.CurrentAttemptNumber);
+            : SessionPlanSnapshot.GetStep(plan, session.CurrentStepNumber);
+
+        if (session.Status is SessionStatus.Completed or SessionStatus.Cancelled or SessionStatus.Missed)
+        {
+            return new SessionRuntimeResponse
+            {
+                SessionId = session.Id,
+                Status = status,
+                CurrentStep = currentPlanStep is null
+                    ? null
+                    : StartSessionCommandHandler.MapStep(currentPlanStep, session.CurrentAttemptNumber),
+                Command = SessionRuntimeCommand.SessionCompleted,
+                ActivityType = session.ActivityType,
+                Prompt = session.Prompt
+            };
+        }
+
+        // Still running — never report session_completed while InProgress/Scheduled.
+        if (plan is null || currentPlanStep is null)
+        {
+            return new SessionRuntimeResponse
+            {
+                SessionId = session.Id,
+                Status = SessionRuntimeStatus.InProgress,
+                Command = SessionRuntimeCommand.PlayAvatarSpeech,
+                ActivityType = session.ActivityType,
+                Prompt = session.Prompt
+            };
+        }
+
+        SessionRuntimeStepDto mappedStep = StartSessionCommandHandler.MapStep(
+            currentPlanStep,
+            session.CurrentAttemptNumber);
 
         // After a retry, refresh should resume at recording rather than replaying the step intro.
         // Never resume recording when the step attempt budget is already exhausted.
-        bool canRecordMore = mappedStep is { ExpectsChildResponse: true }
+        bool canRecordMore = mappedStep.ExpectsChildResponse
             && session.CurrentAttemptNumber > 0
             && session.CurrentAttemptNumber < mappedStep.MaximumAttempts;
-
-        string command = canRecordMore
-            ? SessionRuntimeCommand.ReadyToRecord
-            : SessionRuntimeCommand.PlayAvatarSpeech;
 
         return new SessionRuntimeResponse
         {
             SessionId = session.Id,
-            Status = status,
+            Status = SessionRuntimeStatus.InProgress,
             CurrentStep = mappedStep,
-            Command = command,
+            Command = canRecordMore
+                ? SessionRuntimeCommand.ReadyToRecord
+                : SessionRuntimeCommand.PlayAvatarSpeech,
             ActivityType = session.ActivityType,
             Prompt = session.Prompt
         };
     }
-
 }
 
 public static class GetSessionRuntimeEndpoint

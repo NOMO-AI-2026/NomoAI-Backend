@@ -191,7 +191,8 @@ public class EvaluateAttemptFormRequestContractTests
             nameof(EvaluateAttemptFormRequest.ChildId),
             nameof(EvaluateAttemptFormRequest.PreviousAttemptScores),
             nameof(EvaluateAttemptFormRequest.Language),
-            nameof(EvaluateAttemptFormRequest.Age)
+            nameof(EvaluateAttemptFormRequest.Age),
+            nameof(EvaluateAttemptFormRequest.SessionExecution)
         ];
 
         foreach (string name in names)

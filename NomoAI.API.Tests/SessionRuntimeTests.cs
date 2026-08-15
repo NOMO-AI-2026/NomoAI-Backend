@@ -122,6 +122,8 @@ public class AdaptiveTransitionTests
     [InlineData("retry_same")]
     [InlineData("retry_with_hint")]
     [InlineData("simplify")]
+    [InlineData("model")]
+    [InlineData("slow_down")]
     [InlineData("ask_follow_up")]
     [InlineData("continue_conversation")]
     [InlineData("take_short_break")]

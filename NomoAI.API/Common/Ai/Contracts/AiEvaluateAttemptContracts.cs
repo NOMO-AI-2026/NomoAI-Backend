@@ -88,6 +88,9 @@ public sealed class AiEvaluateAttemptResponse
 
     [JsonPropertyName("generatedAt")]
     public DateTimeOffset? GeneratedAt { get; init; }
+
+    [JsonPropertyName("sessionExecution")]
+    public AiSessionExecutionDto? SessionExecution { get; init; }
 }
 
 public sealed class AiAdaptiveDecisionDto
@@ -121,6 +124,21 @@ public sealed class AiAdaptiveDecisionDto
 
     [JsonPropertyName("interventionCategories")]
     public IReadOnlyList<string> InterventionCategories { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("originalTarget")]
+    public string? OriginalTarget { get; init; }
+
+    [JsonPropertyName("practiceTarget")]
+    public string? PracticeTarget { get; init; }
+
+    [JsonPropertyName("simplificationLevel")]
+    public int SimplificationLevel { get; init; }
+
+    [JsonPropertyName("sessionPhase")]
+    public string? SessionPhase { get; init; }
+
+    [JsonPropertyName("hintsUsed")]
+    public int HintsUsed { get; init; }
 }
 
 public sealed class AiSpeechAnalysisResultDto
@@ -228,10 +246,10 @@ public sealed class AiScoreBreakdownDto
     public double CompletenessScore { get; init; }
 
     [JsonPropertyName("fluencyScore")]
-    public double FluencyScore { get; init; }
+    public double? FluencyScore { get; init; }
 
     [JsonPropertyName("pronunciationProxyScore")]
-    public double PronunciationProxyScore { get; init; }
+    public double? PronunciationProxyScore { get; init; }
 
     [JsonPropertyName("overallScore")]
     public double OverallScore { get; init; }

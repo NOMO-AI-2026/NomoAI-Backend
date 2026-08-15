@@ -27,10 +27,14 @@ internal sealed class GenerateSessionSummaryCommandHandler
     : IRequestHandler<GenerateSessionSummaryCommand, Result<SessionSummaryDto>>
 {
     private readonly AppDbContext _db;
+    private readonly ILogger<GenerateSessionSummaryCommandHandler> _logger;
 
-    public GenerateSessionSummaryCommandHandler(AppDbContext db)
+    public GenerateSessionSummaryCommandHandler(
+        AppDbContext db,
+        ILogger<GenerateSessionSummaryCommandHandler> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<Result<SessionSummaryDto>> Handle(
@@ -88,7 +92,7 @@ internal sealed class GenerateSessionSummaryCommandHandler
         }
 
         SessionSummaryAnalytics.ComputedAnalytics analytics =
-            SessionSummaryAnalytics.Compute(session, signals);
+            SessionSummaryAnalytics.Compute(session, signals, _logger);
 
         SessionSummary entity = existing ?? new SessionSummary
         {

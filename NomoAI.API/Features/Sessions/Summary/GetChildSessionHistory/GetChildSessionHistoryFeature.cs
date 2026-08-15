@@ -6,7 +6,6 @@ using NomoAI.API.Common;
 using NomoAI.API.Common.Abstractions;
 using NomoAI.API.Domain.Enums;
 using NomoAI.API.Features.Sessions.Runtime;
-using NomoAI.API.Migrations;
 using NomoAI.API.Persistence;
 
 namespace NomoAI.API.Features.Sessions.Summary.GetChildSessionHistory;
@@ -31,7 +30,7 @@ public sealed record ChildSessionHistoryItemDto
     public bool IsDoctorReviewed { get; set; } = false;
 
     /// <summary>
-    /// Doctor star rating (1ñ5). Null until the doctor reviews the session.
+    /// Doctor star rating (1ù5). Null until the doctor reviews the session.
     /// </summary>
     public int? DoctorRating { get; set; }
 
@@ -39,6 +38,9 @@ public sealed record ChildSessionHistoryItemDto
     /// Doctor review comment. Null until the doctor reviews the session.
     /// </summary>
     public string? DoctorComment { get; set; }
+
+    public bool repeatSession { get; set; }
+
 }
 
 public sealed record GetChildSessionHistoryQuery(int ChildId, string UserId)
@@ -80,6 +82,15 @@ internal sealed class GetChildSessionHistoryQueryHandler
             return Result.Failure<IReadOnlyList<ChildSessionHistoryItemDto>>(SessionSummaryErrors.Forbidden);
         }
 
+        bool isDoctor = await _db.Doctor
+            .AsNoTracking()
+            .AnyAsync(d => d.UserId == request.UserId && !d.IsDeleted, cancellationToken);
+
+        if (!isDoctor)
+        {
+            return Result.Failure<IReadOnlyList<ChildSessionHistoryItemDto>>(SessionSummaryErrors.Forbidden);
+        }
+
         var rows = await _db.Sessions
             .AsNoTracking()
             .Where(session =>
@@ -110,7 +121,8 @@ internal sealed class GetChildSessionHistoryQueryHandler
                     AverageScore = summary != null ? (decimal?)summary.AverageScore : null,
                     IsDoctorReviewed = x.session.IsDoctorReviewed,
                     DoctorRating = x.session.DoctorRating,
-                    DoctorComment = x.session.DoctorComment
+                    DoctorComment = x.session.DoctorComment,
+                    repeatSession = x.session.Activity.CanMakeSession
                 })
             .OrderByDescending(row => row.EndedAt ?? row.StartedAt)
             .Take(50)
@@ -137,7 +149,8 @@ internal sealed class GetChildSessionHistoryQueryHandler
                 AverageScore = row.AverageScore,
                 IsDoctorReviewed = row.IsDoctorReviewed,
                 DoctorRating = row.DoctorRating,
-                DoctorComment = row.DoctorComment
+                DoctorComment = row.DoctorComment,
+                repeatSession = row.repeatSession
             })
             .ToArray();
 
@@ -150,7 +163,7 @@ public sealed class GetChildSessionHistoryEndpoint : IEndpoint
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/children/{childId:int}/sessions/history", HandleAsync)
-            .RequireAuthorization(policy => policy.RequireRole("Doctor", "Parent"))
+            .RequireAuthorization(policy => policy.RequireRole("Doctor"))
             .WithName("GetChildSessionHistory")
             .WithTags("Sessions")
             .WithSummary("List completed therapy sessions for a child (history with summary status)")

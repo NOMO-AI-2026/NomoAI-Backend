@@ -18,6 +18,7 @@ public sealed class GetDoctorDetailsEndpoint : IEndpoint
                 "for a non-deleted doctor so an admin can review before approval.")
             .Produces<Result<DoctorDetailsResponse>>(StatusCodes.Status200OK)
             .Produces<Error>(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
             .Produces<Error>(StatusCodes.Status404NotFound);
     }
 

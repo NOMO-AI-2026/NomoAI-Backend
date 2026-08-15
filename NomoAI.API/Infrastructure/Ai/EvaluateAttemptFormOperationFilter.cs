@@ -142,6 +142,12 @@ public sealed class EvaluateAttemptFormOperationFilter : IOperationFilter
                 {
                     Type = "integer",
                     Format = "int32"
+                },
+                [nameof(EvaluateAttemptFormRequest.SessionExecution)] = new OpenApiSchema
+                {
+                    Type = "string",
+                    Nullable = true,
+                    Description = "Optional JSON snapshot of sessionExecution from the previous evaluate response."
                 }
             }
         };

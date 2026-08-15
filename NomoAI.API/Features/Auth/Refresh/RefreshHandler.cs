@@ -53,11 +53,12 @@ public sealed class RefreshHandler
                 AuthErrors.InvalidRefreshToken);
         }
 
-        if (!user.EmailConfirmed)
-        {
-            return Result.Failure<RefreshAuthResult>(
-                AuthErrors.EmailNotConfirmed);
-        }
+        // TEMP: allow refresh without email confirmation (matches login bypass for testing).
+        // if (!user.EmailConfirmed)
+        // {
+        //     return Result.Failure<RefreshAuthResult>(
+        //         AuthErrors.EmailNotConfirmed);
+        // }
 
         var roles = await _userManager.GetRolesAsync(user);
         string role = roles.FirstOrDefault();

@@ -38,10 +38,8 @@ internal sealed class GetDoctorDetailsQueryHandler
                 YearsOfExperience = item.YearsOfExperience,
                 ClinicName = item.ClinicName,
                 ProfessionalBio = item.ProfessionalBio,
-                IdentityDocumentUrl = item.IdentityDocumentUrl,
                 PracticeLicenseUrl = item.PracticeLicenseUrl,
                 SyndicateCardUrl = item.SyndicateCardUrl,
-                SyndicateRegistrationNumber = item.SyndicateRegistrationNumber,
                 CreatedAt = item.CreatedAt
             })
             .SingleOrDefaultAsync(cancellationToken);

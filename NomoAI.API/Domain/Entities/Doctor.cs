@@ -14,17 +14,12 @@ namespace NomoAI.API.Domain.Entities
         public string? ProfessionalBio { get; set; }
         public bool IsApproved { get; set; }
 
-        /// <summary>Public URL of national ID or passport (image/PDF). Required for new Doctor registration.</summary>
-        public string? IdentityDocumentUrl { get; set; }
-
         /// <summary>Public URL of the professional practice license. Required for new Doctor registration.</summary>
         public string? PracticeLicenseUrl { get; set; }
 
         /// <summary>Public URL of the Doctors' Syndicate membership card. Required for new Doctor registration.</summary>
         public string? SyndicateCardUrl { get; set; }
 
-        /// <summary>Doctors' Syndicate registration number (plain text). Required with the syndicate card.</summary>
-        public string? SyndicateRegistrationNumber { get; set; }
         public ApplicationUser User { get; set; } = null!;
 
         public ICollection<Children> Children { get; set; }

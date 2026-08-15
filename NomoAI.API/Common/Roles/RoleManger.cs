@@ -136,13 +136,8 @@ namespace NomoAI.API.Common.Roles
             doctor.YearsOfExperience = doctorProfile?.YearsOfExperience;
             doctor.ClinicName = doctorProfile?.ClinicName;
             doctor.ProfessionalBio = doctorProfile?.ProfessionalBio;
-            doctor.IdentityDocumentUrl = doctorProfile?.IdentityDocumentUrl?.Trim();
             doctor.PracticeLicenseUrl = doctorProfile?.PracticeLicenseUrl?.Trim();
             doctor.SyndicateCardUrl = doctorProfile?.SyndicateCardUrl?.Trim();
-            doctor.SyndicateRegistrationNumber =
-                string.IsNullOrWhiteSpace(doctorProfile?.SyndicateRegistrationNumber)
-                    ? doctorProfile?.SyndicateRegistrationNumber
-                    : doctorProfile.SyndicateRegistrationNumber.Trim();
         }
 
         private async Task EnsureDoctorWalletAsync(int doctorId)

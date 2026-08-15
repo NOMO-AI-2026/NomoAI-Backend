@@ -17,8 +17,6 @@ internal sealed class DoctorRegisterForm
     public int? YearsOfExperience { get; init; }
     public string? ClinicName { get; init; }
     public string? ProfessionalBio { get; init; }
-    public required string SyndicateRegistrationNumber { get; init; }
-    public required DoctorDocumentFile IdentityDocument { get; init; }
     public required DoctorDocumentFile PracticeLicense { get; init; }
     public required DoctorDocumentFile SyndicateCard { get; init; }
 }
@@ -35,11 +33,6 @@ internal static class DoctorRegisterFormBinder
         string fullName = Get(form, "FullName");
         string email = Get(form, "Email");
         string password = Get(form, "Password");
-        string syndicateNumber = Get(form, "syndicateRegistrationNumber");
-        if (string.IsNullOrWhiteSpace(syndicateNumber))
-        {
-            syndicateNumber = Get(form, "SyndicateRegistrationNumber");
-        }
 
         Require(errors, "FullName", fullName, "FullName is required.");
         Require(errors, "Email", email, "Email is required.");
@@ -76,26 +69,11 @@ internal static class DoctorRegisterFormBinder
             }
         }
 
-        DoctorDocumentFile? identity = ToFile(form.Files.GetFile("identityDocument"));
         DoctorDocumentFile? license = ToFile(form.Files.GetFile("practiceLicense"));
         DoctorDocumentFile? syndicate = ToFile(form.Files.GetFile("syndicateCard"));
 
-        AddFileError(errors, "identityDocument", DoctorDocumentFileRules.Validate(identity, "Identity document"));
         AddFileError(errors, "practiceLicense", DoctorDocumentFileRules.Validate(license, "Practice license"));
         AddFileError(errors, "syndicateCard", DoctorDocumentFileRules.Validate(syndicate, "Syndicate card"));
-
-        if (string.IsNullOrWhiteSpace(syndicateNumber))
-        {
-            errors.Add(new ValidationFailure(
-                "syndicateRegistrationNumber",
-                "Syndicate registration number is required for doctor registration."));
-        }
-        else if (syndicateNumber.Trim().Length > DoctorDocumentLimits.MaxSyndicateRegistrationNumberLength)
-        {
-            errors.Add(new ValidationFailure(
-                "syndicateRegistrationNumber",
-                $"Syndicate registration number cannot exceed {DoctorDocumentLimits.MaxSyndicateRegistrationNumberLength} characters."));
-        }
 
         if (errors.Count > 0)
         {
@@ -116,8 +94,6 @@ internal static class DoctorRegisterFormBinder
             YearsOfExperience = yearsOfExperience,
             ClinicName = EmptyToNull(Get(form, "ClinicName")),
             ProfessionalBio = EmptyToNull(Get(form, "ProfessionalBio")),
-            SyndicateRegistrationNumber = syndicateNumber.Trim(),
-            IdentityDocument = identity!,
             PracticeLicense = license!,
             SyndicateCard = syndicate!
         };

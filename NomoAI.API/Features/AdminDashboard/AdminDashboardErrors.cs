@@ -6,5 +6,9 @@ namespace NomoAI.API.Features.AdminDashboard
     {
       public static Error DoctorNotFound => new Error("Admin.DoctorNotFound", "Doctor not found.", 404);
         public static Error ParentNotFound => new Error("Admin.ParentNotFound", "Parent not found.", 404);
+        public static Error NoPendingDocuments => new Error(
+            "Admin.NoPendingDocuments",
+            "This doctor has no pending verification documents to review.",
+            409);
     }
 }

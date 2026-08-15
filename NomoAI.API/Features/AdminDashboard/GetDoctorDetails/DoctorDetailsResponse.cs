@@ -30,5 +30,11 @@ public sealed class DoctorDetailsResponse
 
     public string? SyndicateCardUrl { get; init; }
 
+    public string? PendingPracticeLicenseUrl { get; init; }
+
+    public string? PendingSyndicateCardUrl { get; init; }
+
+    public bool HasPendingDocuments { get; init; }
+
     public DateTime CreatedAt { get; init; }
 }

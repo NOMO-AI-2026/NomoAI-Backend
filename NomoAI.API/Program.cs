@@ -26,6 +26,7 @@ using NomoAI.API.Features.Auth;
 using NomoAI.API.Features.Auth.Register_User;
 using NomoAI.API.Features.Children;
 using NomoAI.API.Features.Parents;
+using NomoAI.API.Features.Profile.UpdateDoctorDocuments;
 using NomoAI.API.Features.Sessions;
 using NomoAI.API.Infrastructure;
 using NomoAI.API.Infrastructure.Ai;
@@ -67,6 +68,7 @@ namespace NomoAI.API
 
                 options.OperationFilter<EvaluateAttemptFormOperationFilter>();
                 options.OperationFilter<RegisterFormOperationFilter>();
+                options.OperationFilter<UpdateDoctorDocumentsFormOperationFilter>();
 
                 options.AddSecurityDefinition(
                     "Bearer",

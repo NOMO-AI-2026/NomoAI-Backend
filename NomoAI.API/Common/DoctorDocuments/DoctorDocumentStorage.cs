@@ -21,10 +21,7 @@ public sealed class DoctorDocumentStorage
         string publicApiBaseUrl,
         CancellationToken cancellationToken)
     {
-        string webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
-            ? Path.Combine(_environment.ContentRootPath, "wwwroot")
-            : _environment.WebRootPath;
-
+        string webRoot = GetWebRoot();
         string folderId = Guid.NewGuid().ToString("N");
         string folderPath = Path.Combine(
             webRoot,
@@ -99,6 +96,41 @@ public sealed class DoctorDocumentStorage
                 folderPath);
         }
     }
+
+    public string? TryResolveLocalFolderPath(string? documentUrl)
+    {
+        if (string.IsNullOrWhiteSpace(documentUrl))
+        {
+            return null;
+        }
+
+        string marker = "/" + DoctorDocumentLimits.RelativeFolder.Replace('\\', '/') + "/";
+        string normalized = documentUrl.Replace('\\', '/');
+        int markerIndex = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return null;
+        }
+
+        string remainder = normalized[(markerIndex + marker.Length)..];
+        string folderId = remainder
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        if (folderId.Length == 0
+            || folderId.Contains("..", StringComparison.Ordinal)
+            || folderId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return null;
+        }
+
+        return Path.Combine(GetWebRoot(), "uploads", "doctor-documents", folderId);
+    }
+
+    private string GetWebRoot() =>
+        string.IsNullOrWhiteSpace(_environment.WebRootPath)
+            ? Path.Combine(_environment.ContentRootPath, "wwwroot")
+            : _environment.WebRootPath;
 
     private static async Task<string> SaveFileAsync(
         DoctorDocumentFile file,

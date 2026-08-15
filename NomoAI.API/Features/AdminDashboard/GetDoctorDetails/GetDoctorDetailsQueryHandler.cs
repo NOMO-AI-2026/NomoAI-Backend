@@ -40,6 +40,10 @@ internal sealed class GetDoctorDetailsQueryHandler
                 ProfessionalBio = item.ProfessionalBio,
                 PracticeLicenseUrl = item.PracticeLicenseUrl,
                 SyndicateCardUrl = item.SyndicateCardUrl,
+                PendingPracticeLicenseUrl = item.PendingPracticeLicenseUrl,
+                PendingSyndicateCardUrl = item.PendingSyndicateCardUrl,
+                HasPendingDocuments =
+                    item.PendingPracticeLicenseUrl != null || item.PendingSyndicateCardUrl != null,
                 CreatedAt = item.CreatedAt
             })
             .SingleOrDefaultAsync(cancellationToken);

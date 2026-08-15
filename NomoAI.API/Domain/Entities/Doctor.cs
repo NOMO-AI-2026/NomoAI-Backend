@@ -20,6 +20,12 @@ namespace NomoAI.API.Domain.Entities
         /// <summary>Public URL of the Doctors' Syndicate membership card. Required for new Doctor registration.</summary>
         public string? SyndicateCardUrl { get; set; }
 
+        /// <summary>Replacement practice license awaiting admin review. Active URL stays in use until accepted.</summary>
+        public string? PendingPracticeLicenseUrl { get; set; }
+
+        /// <summary>Replacement syndicate card awaiting admin review. Active URL stays in use until accepted.</summary>
+        public string? PendingSyndicateCardUrl { get; set; }
+
         public ApplicationUser User { get; set; } = null!;
 
         public ICollection<Children> Children { get; set; }

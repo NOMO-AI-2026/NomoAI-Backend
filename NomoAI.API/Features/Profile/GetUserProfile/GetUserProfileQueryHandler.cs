@@ -45,6 +45,10 @@ namespace NomoAI.API.Features.Profile.GetUserProfile
                     ProfessionalBio = d.ProfessionalBio,
                     PracticeLicenseUrl = d.PracticeLicenseUrl,
                     SyndicateCardUrl = d.SyndicateCardUrl,
+                    PendingPracticeLicenseUrl = d.PendingPracticeLicenseUrl,
+                    PendingSyndicateCardUrl = d.PendingSyndicateCardUrl,
+                    HasPendingDocuments =
+                        d.PendingPracticeLicenseUrl != null || d.PendingSyndicateCardUrl != null,
                     AvailableMinutes = d.creditWallet.AvailableMinutes
                 })
                 .SingleOrDefaultAsync(cancellationToken);

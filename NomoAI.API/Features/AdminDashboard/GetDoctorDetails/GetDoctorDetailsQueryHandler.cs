@@ -27,6 +27,7 @@ internal sealed class GetDoctorDetailsQueryHandler
                 !item.User.IsDeleted)
             .Select(item => new DoctorDetailsResponse
             {
+                Id = item.Id,
                 UserId = item.UserId,
                 FullName = item.User.Fullname,
                 Email = item.User.Email ?? string.Empty,

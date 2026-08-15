@@ -4,6 +4,8 @@ namespace NomoAI.API.Features.AdminDashboard.GetDoctorDetails;
 
 public sealed class DoctorDetailsResponse
 {
+    public int Id { get; init; }
+
     public required string UserId { get; init; }
 
     public required string FullName { get; init; }
